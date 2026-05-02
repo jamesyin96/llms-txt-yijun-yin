@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ app_name }}</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <main>
+      <section class="shell" aria-labelledby="page-title">
+        <h1 id="page-title">{{ app_name }}</h1>
+        <p>Enter a website URL and generate a downloadable llms.txt file.</p>
+
+        <form data-scan-form>
+          <input data-url-input name="url" type="text" inputmode="url" placeholder="https://example.com" autocomplete="url" required>
+          <button type="submit">Go</button>
+        </form>
+
+        <div class="status" data-status aria-live="polite"></div>
+        <div class="result" data-result></div>
+      </section>
+    </main>
+    <script src="/static/app.js"></script>
+  </body>
+</html>
