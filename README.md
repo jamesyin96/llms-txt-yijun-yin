@@ -27,6 +27,27 @@ Then open:
 http://127.0.0.1:8000
 ```
 
+## Run And Stop With Conda
+
+Start the local server:
+
+```bash
+conda activate myenv
+uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+Stop the local server:
+
+```text
+Press Ctrl+C in the terminal running uvicorn.
+```
+
+Leave the conda environment:
+
+```bash
+conda deactivate
+```
+
 ## Current Scope
 
 - Plain HTML frontend with a centered URL input and Go button.
