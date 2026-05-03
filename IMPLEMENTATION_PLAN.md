@@ -149,6 +149,10 @@ Rules to preserve:
 
 - URL normalization and validation.
 - Security checks for user-submitted URLs.
+- HTTP fetching with timeout, retry, redirect, and response-size controls.
+- Robots.txt parsing and sitemap hint extraction.
+- Sitemap parsing and URL discovery.
+- HTML link discovery.
 - Crawler orchestration.
 - Metadata extraction.
 - Page scoring and categorization.
@@ -170,6 +174,35 @@ Rules to preserve:
 9. Frontend polls `GET /api/scans/{id}` until the scan is complete.
 10. Frontend displays `GET /download/{id}` as the download link.
 11. Monitoring re-fetches known URLs and checks content hashes or metadata changes.
+
+## Modularization Plan
+
+Keep implementation components small and independently testable. The scanner should orchestrate modules; it should not contain all crawling, parsing, ranking, formatting, and persistence logic in one file.
+
+Suggested service layout:
+
+- `app/services/url_utils.py`: URL normalization, canonicalization, same-host checks, and URL type helpers.
+- `app/services/security.py`: SSRF protection, DNS/IP validation, redirect safety checks, and blocked network ranges.
+- `app/services/fetcher.py`: Shared HTTP client with timeout, retry/backoff, user-agent, content-type detection, max response size, and safe redirect handling.
+- `app/services/robots.py`: `robots.txt` fetching/parsing, allow/disallow decisions, crawl-delay if supported later, and sitemap hints.
+- `app/services/sitemap.py`: Sitemap index and URL-set parsing.
+- `app/services/html_parser.py`: HTML metadata extraction, canonical URL extraction, heading extraction, internal link discovery, image discovery, and link context.
+- `app/services/resource_classifier.py`: Resource type detection and PDF/image/icon/static-asset inclusion rules.
+- `app/services/crawler.py`: Crawl queue, depth/page limits, deduplication, sitemap-first discovery, homepage/internal-link fallback, and crawl result assembly.
+- `app/services/ranker.py`: Page scoring, low-value filtering, and section assignment.
+- `app/services/formatter.py`: Markdown-only `llms.txt` rendering.
+- `app/services/scanner.py`: Scan lifecycle orchestration, database writes, file writes, and error handling.
+- `app/services/change_detector.py`: Manual re-scan comparison and added/changed/removed summaries.
+
+Module boundaries:
+
+- Network requests must go through `fetcher.py`.
+- Fetch safety checks must go through `security.py`.
+- Parsing modules should not write to the database.
+- Ranking should operate on plain crawl result objects, not ORM models.
+- Formatting should accept plain resource objects and return Markdown text.
+- Persistence should stay in `scanner.py` or a small repository layer if the scanner grows too large.
+- Tests should target modules directly before relying on end-to-end tests.
 
 ## V1 API Contract
 
