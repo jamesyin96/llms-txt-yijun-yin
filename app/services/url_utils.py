@@ -1,8 +1,8 @@
 """URL normalization helpers.
 
-This module currently handles user-facing URL cleanup. Before real crawling is
-added, it should grow the planned SSRF protections: hostname resolution,
-private-network blocking, redirect re-checks, and response limits.
+This module handles user-facing URL cleanup. SSRF protection lives in
+`app.services.security` so normalization and fetch safety can be tested and
+evolved independently.
 """
 
 from urllib.parse import urlparse, urlunparse

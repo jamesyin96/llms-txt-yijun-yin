@@ -8,6 +8,9 @@ V1 exposes a deliberately small surface area:
 - `GET /download/{scan_id}` returns the generated `llms.txt`.
 """
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -19,19 +22,26 @@ from app.db import get_db, init_db
 from app.models import Scan
 from app.schemas import ScanCreate, ScanCreated, ScanStatus
 from app.services.scanner import run_scan
+from app.services.security import UnsafeUrlError, assert_safe_url
 from app.services.url_utils import normalize_root_url
 
 
-app = FastAPI(title=APP_NAME)
-app.mount("/static", StaticFiles(directory=BASE_DIR / "app" / "static"), name="static")
-templates = Jinja2Templates(directory=BASE_DIR / "app" / "templates")
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    """Prepare storage and SQLite tables when the app starts.
 
-
-@app.on_event("startup")
-def on_startup() -> None:
-    """Prepare storage and SQLite tables when the app starts."""
+    FastAPI now recommends lifespan handlers over `@app.on_event("startup")`.
+    Keeping initialization here avoids deprecation warnings while preserving
+    the same behavior: run `init_db()` once during application startup.
+    """
 
     init_db()
+    yield
+
+
+app = FastAPI(title=APP_NAME, lifespan=lifespan)
+app.mount("/static", StaticFiles(directory=BASE_DIR / "app" / "static"), name="static")
+templates = Jinja2Templates(directory=BASE_DIR / "app" / "templates")
 
 
 @app.get("/")
@@ -49,14 +59,15 @@ def create_scan(
 ) -> ScanCreated:
     """Create a scan record and schedule the scan work.
 
-    The current skeleton validates and normalizes the URL before queueing the
-    task. Full SSRF protection will be added before the real crawler performs
-    outbound network requests.
+    The current skeleton normalizes the URL and runs immediate SSRF-oriented
+    safety checks before queueing the task. DNS and redirect checks are applied
+    by the fetch layer immediately before real network requests.
     """
 
     try:
         normalized_url = normalize_root_url(payload.url)
-    except ValueError as exc:
+        assert_safe_url(normalized_url)
+    except (ValueError, UnsafeUrlError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     scan = Scan(
