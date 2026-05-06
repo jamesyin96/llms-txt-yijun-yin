@@ -2,6 +2,26 @@
 
 Python/FastAPI web app that accepts a website URL, scans it, and returns a downloadable `llms.txt` file.
 
+## What Works Now
+
+- Plain HTML frontend with a centered URL input and Go button.
+- FastAPI backend.
+- SQLite local database.
+- Local generated file storage under `storage/`.
+- Scan lifecycle endpoints:
+  - `POST /api/scans`
+  - `GET /api/scans/{scan_id}`
+  - `GET /download/{scan_id}`
+- SSRF-oriented URL safety checks.
+- Safe HTTP fetcher with timeout, retry, redirect checks, and response-size limits.
+- `robots.txt` fetching and allow/disallow handling.
+- Sitemap-first discovery with `/sitemap.xml` fallback.
+- Homepage/internal HTML link extraction.
+- Metadata extraction from title, meta description, canonical URL, headings, and link context.
+- PDF inclusion.
+- Meaningful image inclusion with icon/static-asset filtering.
+- Generated `llms.txt` validation before writing the downloadable file.
+
 ## Local Setup
 
 Using conda:
@@ -48,15 +68,71 @@ Leave the conda environment:
 conda deactivate
 ```
 
-## Current Scope
+## Testing
 
-- Plain HTML frontend with a centered URL input and Go button.
-- FastAPI backend.
-- SQLite local database.
-- Local generated file storage under `storage/`.
-- Initial scan lifecycle endpoints.
+Run the test suite:
 
-Crawler, robots handling, sitemap discovery, ranking, PDF/image handling, and re-scan change detection will be added in follow-up implementation phases from `IMPLEMENTATION_PLAN.md`.
+```bash
+conda activate myenv
+pytest -q
+```
+
+Run a syntax/import check:
+
+```bash
+python -m compileall app tests
+```
+
+## Manual Smoke Test
+
+Start the app:
+
+```bash
+conda activate myenv
+uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+Open the app:
+
+```text
+http://127.0.0.1:8000
+```
+
+In the browser:
+
+1. Enter a public website URL, such as `example.com`.
+2. Click `Go`.
+3. Wait for the status to complete.
+4. Click `Download llms.txt`.
+5. Confirm the downloaded file starts with an H1 title, includes a blockquote summary when available, and contains Markdown links under section headings.
+
+Optional API-only check:
+
+```bash
+curl -s -X POST http://127.0.0.1:8000/api/scans \
+  -H 'Content-Type: application/json' \
+  -d '{"url":"example.com"}'
+```
+
+Use the returned `scan_id`:
+
+```bash
+curl -s http://127.0.0.1:8000/api/scans/1
+curl -s http://127.0.0.1:8000/download/1
+```
+
+Recent verified state:
+
+- `pytest -q` passes.
+- Real generated `llms.txt` tested with `example.com` through the web app flow.
+- Real crawler/formatter output tested with `https://www.djangoproject.com/`.
+
+## Remaining Work
+
+- Improve ranking beyond simple URL/category heuristics.
+- Add manual re-scan and change detection.
+- Add broader manual quality testing across docs, blogs, marketing sites, and PDF-heavy sites.
+- Add deployment instructions after local testing is stable.
 
 ## Render Free Tier
 

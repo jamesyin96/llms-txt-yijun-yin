@@ -14,7 +14,7 @@ from app.config import STORAGE_DIR
 from app.db import SessionLocal
 from app.models import Page, Scan
 from app.services.crawler import CrawlConfig, CrawlResource, crawl_site
-from app.services.formatter import LlmResource, render_llms_txt
+from app.services.formatter import LlmResource, render_llms_txt, validate_llms_txt
 from app.services.resource_classifier import ResourceType
 
 
@@ -60,6 +60,9 @@ def _run_scan(scan_id: int, db: Session) -> None:
             summary=_summary_from_crawl(crawl_result.resources, scan.normalized_root_url),
             resources=_llm_resources_from_crawl(crawl_result.resources),
         )
+        validation = validate_llms_txt(content)
+        if not validation.valid:
+            raise ValueError(f"Generated llms.txt failed validation: {'; '.join(validation.errors)}")
 
         output_name = f"scan-{scan.id}-llms.txt"
         output_path = Path(output_name)
@@ -157,6 +160,17 @@ def _section_for_resource(resource: CrawlResource) -> str:
         return "Documents"
     if resource.resource_type is ResourceType.IMAGE:
         return "Images"
+    path = _path_for_section(resource.url)
+    if any(part in path for part in ("/docs", "/documentation", "/reference", "/api")):
+        return "Documentation"
+    if any(part in path for part in ("/guide", "/guides", "/tutorial", "/learn")):
+        return "Guides"
+    if any(part in path for part in ("/blog", "/weblog", "/news", "/articles")):
+        return "Articles"
+    if any(part in path for part in ("/about", "/company", "/team", "/careers")):
+        return "Company"
+    if any(part in path for part in ("/support", "/help", "/contact", "/faq")):
+        return "Support"
     return "Key Pages"
 
 
@@ -164,3 +178,10 @@ def _filename_title(url: str) -> str:
     path = url.split("?", 1)[0].rstrip("/")
     filename = path.rsplit("/", 1)[-1]
     return filename.replace("-", " ").replace("_", " ").strip()
+
+
+def _path_for_section(url: str) -> str:
+    path = url.split("://", 1)[-1].split("/", 1)
+    if len(path) == 1:
+        return "/"
+    return f"/{path[1].lower()}"
