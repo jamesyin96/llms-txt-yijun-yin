@@ -1,9 +1,8 @@
 """Scan orchestration service.
 
-The current implementation is a scaffold: it exercises the API, database,
-formatter, storage, and download path with a single homepage resource. The real
-crawler will replace the placeholder block with robots-aware sitemap-first
-discovery, metadata extraction, PDF/image inclusion, and retry handling.
+This module bridges the web/API layer, crawler, database, formatter, and local
+file storage. The crawler returns plain dataclasses; the scanner persists those
+resources and renders the downloadable llms.txt file.
 """
 
 from datetime import datetime
@@ -14,7 +13,9 @@ from sqlalchemy.orm import Session
 from app.config import STORAGE_DIR
 from app.db import SessionLocal
 from app.models import Page, Scan
+from app.services.crawler import CrawlConfig, CrawlResource, crawl_site
 from app.services.formatter import LlmResource, render_llms_txt
+from app.services.resource_classifier import ResourceType
 
 
 def run_scan(scan_id: int) -> None:
@@ -42,38 +43,22 @@ def _run_scan(scan_id: int, db: Session) -> None:
         scan.status = "crawling"
         db.commit()
 
-        # Placeholder implementation for the project skeleton. The real crawler
-        # will replace this with robots-aware sitemap and page discovery.
-        page = Page(
-            scan_id=scan.id,
-            url=scan.normalized_root_url,
-            canonical_url=scan.normalized_root_url,
-            title=_site_name_from_url(scan.normalized_root_url),
-            description=f"Homepage for {scan.normalized_root_url}",
-            resource_type="html",
-            section="Key Pages",
-            score=100.0,
-            status_code=None,
-            last_crawled_at=datetime.utcnow(),
-            included=True,
+        crawl_result = crawl_site(
+            scan.normalized_root_url,
+            crawl_config=CrawlConfig(max_pages=100, max_depth=2),
         )
-        db.add(page)
+        pages = [_page_from_resource(scan.id, resource) for resource in crawl_result.resources]
+        db.add_all(pages)
 
         scan.status = "generating"
-        scan.pages_found = 1
-        scan.pages_included = 1
+        scan.pages_found = len(crawl_result.resources) + len(crawl_result.skipped)
+        scan.pages_included = len(crawl_result.resources)
         db.commit()
 
-        resource = LlmResource(
-            title=page.title or scan.normalized_root_url,
-            url=scan.normalized_root_url,
-            description=page.description or "",
-            section="Key Pages",
-        )
         content = render_llms_txt(
-            site_name=page.title or "Website",
-            summary=f"Generated llms.txt for {scan.normalized_root_url}.",
-            resources=[resource],
+            site_name=_site_name_from_crawl(crawl_result.resources, scan.normalized_root_url),
+            summary=_summary_from_crawl(crawl_result.resources, scan.normalized_root_url),
+            resources=_llm_resources_from_crawl(crawl_result.resources),
         )
 
         output_name = f"scan-{scan.id}-llms.txt"
@@ -96,3 +81,86 @@ def _site_name_from_url(url: str) -> str:
 
     host = url.split("//", 1)[-1].split("/", 1)[0]
     return host.removeprefix("www.")
+
+
+def _page_from_resource(scan_id: int, resource: CrawlResource) -> Page:
+    """Convert a crawler resource into a persisted page record."""
+
+    return Page(
+        scan_id=scan_id,
+        url=resource.url,
+        canonical_url=resource.canonical_url,
+        title=_resource_title(resource),
+        description=_resource_description(resource),
+        resource_type=str(resource.resource_type),
+        section=_section_for_resource(resource),
+        score=0.0,
+        status_code=resource.status_code,
+        content_hash=resource.content_hash,
+        last_crawled_at=datetime.utcnow(),
+        included=True,
+    )
+
+
+def _llm_resources_from_crawl(resources: tuple[CrawlResource, ...]) -> list[LlmResource]:
+    return [
+        LlmResource(
+            title=_resource_title(resource),
+            url=resource.url,
+            description=_resource_description(resource),
+            section=_section_for_resource(resource),
+        )
+        for resource in resources
+    ]
+
+
+def _site_name_from_crawl(resources: tuple[CrawlResource, ...], root_url: str) -> str:
+    homepage = next((resource for resource in resources if resource.url == root_url), None)
+    if homepage:
+        return homepage.title or homepage.h1 or _site_name_from_url(root_url)
+    first_html = next((resource for resource in resources if resource.resource_type is ResourceType.HTML), None)
+    if first_html:
+        return first_html.title or first_html.h1 or _site_name_from_url(root_url)
+    return _site_name_from_url(root_url)
+
+
+def _summary_from_crawl(resources: tuple[CrawlResource, ...], root_url: str) -> str:
+    homepage = next((resource for resource in resources if resource.url == root_url), None)
+    if homepage and homepage.description:
+        return homepage.description
+    first_description = next((resource.description for resource in resources if resource.description), "")
+    return first_description or f"Generated llms.txt for {root_url}."
+
+
+def _resource_title(resource: CrawlResource) -> str:
+    return (
+        resource.title
+        or resource.h1
+        or resource.link_text
+        or _filename_title(resource.url)
+        or resource.url
+    )
+
+
+def _resource_description(resource: CrawlResource) -> str:
+    if resource.description:
+        return resource.description
+    if resource.resource_type is ResourceType.PDF:
+        return resource.link_text or "PDF resource."
+    if resource.resource_type is ResourceType.IMAGE:
+        return resource.link_text or "Image resource."
+    return resource.link_text or ""
+
+
+def _section_for_resource(resource: CrawlResource) -> str:
+    if resource.resource_type is ResourceType.PDF:
+        return "Documents"
+    if resource.resource_type is ResourceType.IMAGE:
+        return "Images"
+    return "Key Pages"
+
+
+def _filename_title(url: str) -> str:
+    path = url.split("?", 1)[0].rstrip("/")
+    filename = path.rsplit("/", 1)[-1]
+    return filename.replace("-", " ").replace("_", " ").strip()

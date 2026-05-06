@@ -135,9 +135,9 @@ def crawl_site(
     skipped: list[SkippedUrl] = []
     errors: list[CrawlError] = []
 
+    _enqueue(queue, queued_urls, _QueueItem(normalized_root_url, depth=0, source_url=None))
     for sitemap_url in sitemap_result.page_urls:
         _enqueue(queue, queued_urls, _QueueItem(sitemap_url, depth=0, source_url="sitemap"))
-    _enqueue(queue, queued_urls, _QueueItem(normalized_root_url, depth=0, source_url=None))
 
     while queue and len(resources) < config.max_pages:
         item = queue.pop(0)
@@ -319,4 +319,3 @@ def _looks_like_html(content_type: str) -> bool:
 
 def _content_hash(content: bytes) -> str:
     return sha256(content).hexdigest()
-

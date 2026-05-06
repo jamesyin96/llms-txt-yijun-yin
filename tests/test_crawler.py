@@ -8,7 +8,7 @@ from app.services.resource_classifier import ResourceType
 ROOT_URL = "https://example.com/"
 
 
-def test_crawler_processes_sitemap_urls_before_homepage() -> None:
+def test_crawler_fetches_homepage_before_sitemap_urls_for_site_identity() -> None:
     calls: list[str] = []
 
     fetcher = _mapping_fetcher(
@@ -28,14 +28,14 @@ def test_crawler_processes_sitemap_urls_before_homepage() -> None:
     result = crawl_site(ROOT_URL, fetcher=fetcher)
 
     assert [resource.url for resource in result.resources] == [
-        "https://example.com/from-sitemap",
         "https://example.com/",
+        "https://example.com/from-sitemap",
     ]
     assert calls[:4] == [
         "https://example.com/robots.txt",
         "https://example.com/sitemap.xml",
-        "https://example.com/from-sitemap",
         "https://example.com/",
+        "https://example.com/from-sitemap",
     ]
 
 
@@ -267,4 +267,3 @@ def _html(title: str, *, links: list[str] | None = None) -> str:
       </body>
     </html>
     """
-
