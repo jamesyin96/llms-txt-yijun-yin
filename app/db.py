@@ -10,6 +10,7 @@ from collections.abc import Generator
 
 from sqlalchemy import create_engine
 from sqlalchemy import inspect, text
+from sqlalchemy.engine import Connection
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.config import DATABASE_URL, STORAGE_DIR
@@ -64,3 +65,59 @@ def _run_lightweight_migrations() -> None:
             connection.execute(
                 text("ALTER TABLE scans ADD COLUMN version_number INTEGER NOT NULL DEFAULT 1")
             )
+    _backfill_scan_versions()
+
+
+def _backfill_scan_versions() -> None:
+    """Keep existing scan rows on a consecutive per-site version sequence."""
+
+    with engine.begin() as connection:
+        rows = connection.execute(
+            text(
+                """
+                SELECT id, normalized_root_url, version_number, output_path
+                FROM scans
+                ORDER BY normalized_root_url ASC, created_at ASC, id ASC
+                """
+            )
+        ).mappings()
+
+        next_versions: dict[str, int] = {}
+        for row in rows:
+            root_url = row["normalized_root_url"]
+            version_number = next_versions.get(root_url, 1)
+            next_versions[root_url] = version_number + 1
+
+            if row["version_number"] != version_number:
+                connection.execute(
+                    text("UPDATE scans SET version_number = :version_number WHERE id = :scan_id"),
+                    {"version_number": version_number, "scan_id": row["id"]},
+                )
+            _backfill_scan_output_path(connection, row["id"], version_number, row["output_path"])
+
+
+def _backfill_scan_output_path(
+    connection: Connection,
+    scan_id: int,
+    version_number: int,
+    output_path: str | None,
+) -> None:
+    """Rename old generated files to match the backfilled version number."""
+
+    if not output_path:
+        return
+
+    desired_name = f"scan-{scan_id}-v{version_number}-llms.txt"
+    if output_path == desired_name:
+        return
+
+    current_path = STORAGE_DIR / output_path
+    desired_path = STORAGE_DIR / desired_name
+    if current_path.exists() and not desired_path.exists():
+        current_path.rename(desired_path)
+
+    if desired_path.exists():
+        connection.execute(
+            text("UPDATE scans SET output_path = :output_path WHERE id = :scan_id"),
+            {"output_path": desired_name, "scan_id": scan_id},
+        )

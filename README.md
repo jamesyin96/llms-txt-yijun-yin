@@ -10,6 +10,7 @@ Python/FastAPI web app that accepts a website URL, scans it, and returns a downl
 - Local generated file storage under `storage/`.
 - Scan lifecycle endpoints:
   - `POST /api/scans`
+  - `GET /api/scans?url=...`
   - `GET /api/scans/{scan_id}`
   - `GET /download/{scan_id}`
 - SSRF-oriented URL safety checks.
@@ -23,6 +24,7 @@ Python/FastAPI web app that accepts a website URL, scans it, and returns a downl
 - Generated `llms.txt` validation before writing the downloadable file.
 - Per-site version numbers for repeated scans of the same normalized URL.
 - Versioned generated files, stored as `scan-{scan_id}-v{version_number}-llms.txt`.
+- Version history display for repeated scans of the same website.
 
 ## Local Setup
 
@@ -107,7 +109,8 @@ In the browser:
 3. Wait for the status to complete.
 4. Click the versioned download link, such as `Download llms-v1.txt`.
 5. Confirm the downloaded file starts with an H1 title, includes a blockquote summary when available, and contains Markdown links under section headings.
-6. Enter the same website URL again and confirm the next completed scan shows the next version number.
+6. Confirm the Version History list shows the completed scan.
+7. Enter the same website URL again and confirm the next completed scan shows the next version number while the older version remains downloadable in history.
 
 Optional API-only check:
 
@@ -121,10 +124,11 @@ Use the returned `scan_id`:
 
 ```bash
 curl -s http://127.0.0.1:8000/api/scans/1
+curl -s 'http://127.0.0.1:8000/api/scans?url=example.com'
 curl -s http://127.0.0.1:8000/download/1
 ```
 
-The API status response includes both a global `scan_id` and a per-site `version_number`. The `scan_id` is the database primary key across all websites. The `version_number` increases only for scans with the same normalized root URL, so scanning `example.com`, then another site, then `example.com` again creates `example.com` versions 1 and 2 while preserving each scan row and generated file separately.
+The API status and history responses include both a global `scan_id` and a per-site `version_number`. The `scan_id` is the database primary key across all websites. The `version_number` increases only for scans with the same normalized root URL, so scanning `example.com`, then another site, then `example.com` again creates `example.com` versions 1 and 2 while preserving each scan row and generated file separately.
 
 Recent verified state:
 
@@ -135,7 +139,6 @@ Recent verified state:
 ## Remaining Work
 
 - Improve ranking beyond simple URL/category heuristics.
-- Add a dedicated re-scan button/history view.
 - Add change detection between stored versions.
 - Add broader manual quality testing across docs, blogs, marketing sites, and PDF-heavy sites.
 - Add deployment instructions after local testing is stable.

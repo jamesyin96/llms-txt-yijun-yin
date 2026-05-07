@@ -4,6 +4,7 @@ V1 exposes a deliberately small surface area:
 
 - `GET /` serves the single-page form.
 - `POST /api/scans` starts a background scan.
+- `GET /api/scans?url=...` lists stored versions for one website.
 - `GET /api/scans/{scan_id}` lets the browser poll status.
 - `GET /download/{scan_id}` returns the generated `llms.txt`.
 """
@@ -21,7 +22,7 @@ from sqlalchemy.orm import Session
 from app.config import APP_NAME, BASE_DIR, STORAGE_DIR
 from app.db import get_db, init_db
 from app.models import Scan
-from app.schemas import ScanCreate, ScanCreated, ScanStatus
+from app.schemas import ScanCreate, ScanCreated, ScanHistory, ScanHistoryItem, ScanStatus
 from app.services.scanner import run_scan
 from app.services.security import UnsafeUrlError, assert_safe_url
 from app.services.url_utils import normalize_root_url
@@ -85,6 +86,28 @@ def create_scan(
     return ScanCreated(scan_id=scan.id, version_number=scan.version_number, status=scan.status)
 
 
+@app.get("/api/scans", response_model=ScanHistory)
+def list_scans(url: str, db: Session = Depends(get_db)) -> ScanHistory:
+    """Return stored scan versions for a normalized website URL."""
+
+    try:
+        normalized_url = normalize_root_url(url)
+        assert_safe_url(normalized_url)
+    except (ValueError, UnsafeUrlError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    scans = (
+        db.query(Scan)
+        .filter(Scan.normalized_root_url == normalized_url)
+        .order_by(Scan.version_number.desc(), Scan.id.desc())
+        .all()
+    )
+    return ScanHistory(
+        root_url=normalized_url,
+        scans=[_scan_history_item(scan) for scan in scans],
+    )
+
+
 @app.get("/api/scans/{scan_id}", response_model=ScanStatus)
 def get_scan(scan_id: int, db: Session = Depends(get_db)) -> ScanStatus:
     """Return scan progress for frontend polling."""
@@ -100,7 +123,7 @@ def get_scan(scan_id: int, db: Session = Depends(get_db)) -> ScanStatus:
         root_url=scan.normalized_root_url,
         pages_found=scan.pages_found,
         pages_included=scan.pages_included,
-        download_url=f"/download/{scan.id}" if scan.status == "complete" else None,
+        download_url=_download_url_for(scan),
         error=scan.error,
     )
 
@@ -124,6 +147,30 @@ def download_scan(scan_id: int, db: Session = Depends(get_db)) -> FileResponse:
         media_type="text/plain",
         filename=f"llms-v{scan.version_number}.txt",
     )
+
+
+def _scan_history_item(scan: Scan) -> ScanHistoryItem:
+    """Convert a scan row into the compact history shape used by the UI."""
+
+    return ScanHistoryItem(
+        scan_id=scan.id,
+        version_number=scan.version_number,
+        status=scan.status,
+        pages_found=scan.pages_found,
+        pages_included=scan.pages_included,
+        download_url=_download_url_for(scan),
+        created_at=scan.created_at,
+        finished_at=scan.finished_at,
+        error=scan.error,
+    )
+
+
+def _download_url_for(scan: Scan) -> str | None:
+    """Return a download URL only when a completed scan has an output file."""
+
+    if scan.status == "complete" and scan.output_path:
+        return f"/download/{scan.id}"
+    return None
 
 
 def _next_version_number(db: Session, normalized_root_url: str) -> int:

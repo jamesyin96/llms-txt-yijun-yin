@@ -1,8 +1,9 @@
 from fastapi.testclient import TestClient
 from uuid import uuid4
 
-from app.db import init_db
+from app.db import SessionLocal, init_db
 from app.main import app
+from app.models import Scan
 
 
 init_db()
@@ -56,3 +57,57 @@ def test_scan_status_includes_version_number(monkeypatch) -> None:
 
     assert response.status_code == 200
     assert response.json()["version_number"] == created.json()["version_number"]
+
+
+def test_scan_history_lists_versions_for_one_site(monkeypatch) -> None:
+    import app.main as main
+
+    monkeypatch.setattr(main, "run_scan", lambda scan_id: None)
+    primary_url = f"https://history-{uuid4().hex}.example.com/"
+    other_url = f"https://history-{uuid4().hex}.example.com/"
+
+    first = client.post("/api/scans", json={"url": primary_url})
+    client.post("/api/scans", json={"url": other_url})
+    second = client.post("/api/scans", json={"url": primary_url})
+
+    response = client.get("/api/scans", params={"url": primary_url})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["root_url"] == primary_url
+    assert [scan["scan_id"] for scan in data["scans"]] == [
+        second.json()["scan_id"],
+        first.json()["scan_id"],
+    ]
+    assert [scan["version_number"] for scan in data["scans"]] == [2, 1]
+
+
+def test_scan_history_includes_download_url_for_completed_versions(monkeypatch) -> None:
+    import app.main as main
+
+    monkeypatch.setattr(main, "run_scan", lambda scan_id: None)
+    url = f"https://history-complete-{uuid4().hex}.example.com/"
+    created = client.post("/api/scans", json={"url": url})
+    scan_id = created.json()["scan_id"]
+
+    db = SessionLocal()
+    try:
+        scan = db.get(Scan, scan_id)
+        assert scan is not None
+        scan.status = "complete"
+        scan.output_path = f"scan-{scan.id}-v{scan.version_number}-llms.txt"
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get("/api/scans", params={"url": url})
+
+    assert response.status_code == 200
+    assert response.json()["scans"][0]["download_url"] == f"/download/{scan_id}"
+
+
+def test_scan_history_rejects_unsafe_url() -> None:
+    response = client.get("/api/scans", params={"url": "localhost"})
+
+    assert response.status_code == 400
+    assert "Localhost" in response.json()["detail"]

@@ -99,6 +99,56 @@ button:hover {
   font-weight: 700;
 }
 
+.history {
+  margin-top: 28px;
+  max-width: 560px;
+}
+
+.history h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  line-height: 1.3;
+}
+
+.history-list {
+  border-top: 1px solid #d9dee3;
+}
+
+.history-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
+  align-items: center;
+  min-height: 56px;
+  border-bottom: 1px solid #d9dee3;
+  padding: 10px 0;
+}
+
+.history-summary {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.history-summary strong {
+  font-size: 15px;
+}
+
+.history-summary span {
+  color: #53606d;
+  font-size: 14px;
+}
+
+.history-row a {
+  color: #17685f;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.history-row a:hover {
+  text-decoration: underline;
+}
+
 @media (max-width: 560px) {
   form {
     grid-template-columns: 1fr;
@@ -107,5 +157,8 @@ button:hover {
   button {
     width: 100%;
   }
-}
 
+  .history-row {
+    grid-template-columns: 1fr;
+  }
+}
