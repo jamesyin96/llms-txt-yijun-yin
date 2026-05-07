@@ -23,6 +23,7 @@ class Scan(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     root_url: Mapped[str] = mapped_column(String(2048), nullable=False)
     normalized_root_url: Mapped[str] = mapped_column(String(2048), nullable=False)
+    version_number: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     status: Mapped[str] = mapped_column(String(32), default="queued", nullable=False)
     pages_found: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     pages_included: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

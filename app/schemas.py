@@ -15,6 +15,7 @@ class ScanCreated(BaseModel):
     """Initial response returned after a scan record has been queued."""
 
     scan_id: int
+    version_number: int
     status: str
 
 
@@ -22,6 +23,7 @@ class ScanStatus(BaseModel):
     """Polling response used by the browser while a scan is running."""
 
     scan_id: int
+    version_number: int
     status: str
     root_url: str
     pages_found: int

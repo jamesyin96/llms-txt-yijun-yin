@@ -64,7 +64,7 @@ def _run_scan(scan_id: int, db: Session) -> None:
         if not validation.valid:
             raise ValueError(f"Generated llms.txt failed validation: {'; '.join(validation.errors)}")
 
-        output_name = f"scan-{scan.id}-llms.txt"
+        output_name = f"scan-{scan.id}-v{scan.version_number}-llms.txt"
         output_path = Path(output_name)
         (STORAGE_DIR / output_path).write_text(content, encoding="utf-8")
 

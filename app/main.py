@@ -15,6 +15,7 @@ from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.config import APP_NAME, BASE_DIR, STORAGE_DIR
@@ -73,6 +74,7 @@ def create_scan(
     scan = Scan(
         root_url=payload.url,
         normalized_root_url=normalized_url,
+        version_number=_next_version_number(db, normalized_url),
         status="queued",
     )
     db.add(scan)
@@ -80,7 +82,7 @@ def create_scan(
     db.refresh(scan)
 
     background_tasks.add_task(run_scan, scan.id)
-    return ScanCreated(scan_id=scan.id, status=scan.status)
+    return ScanCreated(scan_id=scan.id, version_number=scan.version_number, status=scan.status)
 
 
 @app.get("/api/scans/{scan_id}", response_model=ScanStatus)
@@ -93,6 +95,7 @@ def get_scan(scan_id: int, db: Session = Depends(get_db)) -> ScanStatus:
 
     return ScanStatus(
         scan_id=scan.id,
+        version_number=scan.version_number,
         status=scan.status,
         root_url=scan.normalized_root_url,
         pages_found=scan.pages_found,
@@ -119,5 +122,14 @@ def download_scan(scan_id: int, db: Session = Depends(get_db)) -> FileResponse:
     return FileResponse(
         output_path,
         media_type="text/plain",
-        filename="llms.txt",
+        filename=f"llms-v{scan.version_number}.txt",
     )
+
+
+def _next_version_number(db: Session, normalized_root_url: str) -> int:
+    """Return the next per-site version number for a normalized root URL."""
+
+    current_max = db.query(func.max(Scan.version_number)).filter(
+        Scan.normalized_root_url == normalized_root_url
+    ).scalar()
+    return (current_max or 0) + 1

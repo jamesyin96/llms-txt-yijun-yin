@@ -32,8 +32,9 @@ async function pollScan(scanId) {
   const scan = await response.json();
 
   if (scan.status === "complete") {
-    setStatus(`Complete. ${scan.pages_included} page included.`);
-    resultEl.innerHTML = `<a class="download-link" href="${scan.download_url}">Download llms.txt</a>`;
+    const pageLabel = scan.pages_included === 1 ? "page" : "pages";
+    setStatus(`Complete. Version ${scan.version_number}. ${scan.pages_included} ${pageLabel} included.`);
+    resultEl.innerHTML = `<a class="download-link" href="${scan.download_url}">Download llms-v${scan.version_number}.txt</a>`;
     return;
   }
 
@@ -50,4 +51,3 @@ function setStatus(message, isError = false) {
   statusEl.textContent = message;
   statusEl.classList.toggle("error", isError);
 }
-

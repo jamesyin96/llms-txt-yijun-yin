@@ -48,6 +48,7 @@ def test_run_scan_persists_crawl_resources_and_generated_file(tmp_path, monkeypa
     scan = Scan(
         root_url="example.com",
         normalized_root_url="https://example.com/",
+        version_number=2,
         status="queued",
     )
     db.add(scan)
@@ -61,6 +62,7 @@ def test_run_scan_persists_crawl_resources_and_generated_file(tmp_path, monkeypa
     generated = Path(tmp_path / scan.output_path).read_text(encoding="utf-8")
 
     assert scan.status == "complete"
+    assert scan.output_path == f"scan-{scan.id}-v2-llms.txt"
     assert scan.pages_found == 3
     assert scan.pages_included == 3
     assert len(pages) == 3
@@ -102,7 +104,12 @@ def test_run_scan_groups_common_page_types_into_sections(tmp_path, monkeypatch):
     )
 
     db = _fresh_db_session(tmp_path)
-    scan = Scan(root_url="example.com", normalized_root_url="https://example.com/", status="queued")
+    scan = Scan(
+        root_url="example.com",
+        normalized_root_url="https://example.com/",
+        version_number=1,
+        status="queued",
+    )
     db.add(scan)
     db.commit()
     db.refresh(scan)
@@ -134,6 +141,7 @@ def test_run_scan_marks_scan_failed_when_crawler_raises(tmp_path, monkeypatch):
     scan = Scan(
         root_url="example.com",
         normalized_root_url="https://example.com/",
+        version_number=1,
         status="queued",
     )
     db.add(scan)
