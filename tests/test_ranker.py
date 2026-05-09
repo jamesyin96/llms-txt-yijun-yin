@@ -117,3 +117,69 @@ def test_rank_resources_applies_max_resource_cap() -> None:
     ranked = rank_resources(resources, ROOT_URL, max_resources=2)
 
     assert len(ranked) == 2
+
+
+def test_ranker_tokenizes_html_filenames_for_sections_and_filters() -> None:
+    resources = (
+        CrawlResource(
+            url="https://example.com/quickstart.html",
+            resource_type=ResourceType.HTML,
+            title="Quickstart",
+        ),
+        CrawlResource(
+            url="https://example.com/copyright.html",
+            resource_type=ResourceType.HTML,
+            title="Copyright",
+        ),
+    )
+
+    ranked = rank_resources(resources, ROOT_URL)
+
+    assert [(item.section, item.resource.url) for item in ranked] == [
+        ("Guides", "https://example.com/quickstart.html")
+    ]
+
+
+def test_rank_resources_caps_image_count() -> None:
+    resources = tuple(
+        CrawlResource(
+            url=f"https://example.com/images/chart-{index}.png",
+            resource_type=ResourceType.IMAGE,
+            description=f"Chart {index}",
+            link_text=f"Chart {index}",
+        )
+        for index in range(5)
+    )
+
+    ranked = rank_resources(resources, ROOT_URL)
+
+    assert len(ranked) == 3
+    assert all(item.section == "Images" for item in ranked)
+
+
+def test_feed_sitemap_and_subscribe_pages_are_excluded() -> None:
+    for url in (
+        "https://example.com/feeds/feeds.html",
+        "https://example.com/sitemap.html",
+        "https://example.com/subscribe.html",
+    ):
+        ranked = rank_resource(
+            CrawlResource(url=url, resource_type=ResourceType.HTML, title="Utility"),
+            ROOT_URL,
+        )
+
+        assert ranked.include is False
+
+
+def test_query_heavy_list_pages_are_excluded() -> None:
+    ranked = rank_resource(
+        CrawlResource(
+            url="https://example.com/list/recent?skip=100&show=50",
+            resource_type=ResourceType.HTML,
+            title="Recent Items",
+            description="Paginated list",
+        ),
+        ROOT_URL,
+    )
+
+    assert ranked.include is False

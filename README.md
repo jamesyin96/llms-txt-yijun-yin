@@ -143,6 +143,7 @@ Recent verified state:
 - Real generated `llms.txt` tested with `example.com` through the web app flow.
 - Real crawler/formatter output tested with `https://www.djangoproject.com/`.
 - Bounded real-site ranking check tested with `https://www.djangoproject.com/`.
+- Manual ranking QA notes are tracked in `MANUAL_QA.md`.
 
 ## Remaining Work
 

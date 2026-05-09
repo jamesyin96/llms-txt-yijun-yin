@@ -390,6 +390,7 @@ V1 inclusion rules:
 - Keep the homepage even when metadata is thin.
 - Include resources with score at or above the V1 threshold.
 - Exclude strongly low-value pages even if discovered by sitemap.
+- Cap image resources so image-heavy sites do not dominate `llms.txt`.
 - Sort by section priority, then score descending, then URL.
 - Keep the output cap aligned with crawler max pages: 100 included resources.
 

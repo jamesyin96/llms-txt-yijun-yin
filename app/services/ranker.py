@@ -16,6 +16,7 @@ from app.services.url_utils import normalize_root_url
 
 MAX_INCLUDED_RESOURCES = 100
 INCLUDE_THRESHOLD = 35.0
+MAX_IMAGE_RESOURCES = 3
 
 SECTION_PRIORITY = {
     "Key Pages": 0,
@@ -31,7 +32,7 @@ SECTION_PRIORITY = {
 }
 
 SECTION_KEYWORDS = (
-    ("Documentation", ("docs", "documentation", "reference", "api", "developer", "developers")),
+    ("Documentation", ("docs", "documentation", "reference", "api", "developer", "developers", "lang")),
     ("Guides", ("guide", "guides", "tutorial", "tutorials", "learn", "getting-started", "quickstart")),
     ("Products or Services", ("product", "products", "features", "solutions", "pricing", "plans")),
     ("Articles", ("blog", "weblog", "news", "article", "articles", "changelog", "updates")),
@@ -49,10 +50,13 @@ LOW_VALUE_KEYWORDS = {
     "category",
     "checkout",
     "cookie",
+    "copyright",
     "dashboard",
     "embed",
     "feed",
+    "feeds",
     "legal",
+    "license",
     "login",
     "logout",
     "payment",
@@ -63,6 +67,8 @@ LOW_VALUE_KEYWORDS = {
     "share",
     "signin",
     "signup",
+    "sitemap",
+    "subscribe",
     "tag",
     "terms",
 }
@@ -90,7 +96,7 @@ def rank_resources(
     ranked = [rank_resource(resource, root_url) for resource in resources]
     included = [resource for resource in ranked if resource.include]
     included.sort(key=_rank_sort_key)
-    return included[:max_resources]
+    return _apply_section_caps(included)[:max_resources]
 
 
 def rank_resource(resource: CrawlResource, root_url: str) -> RankedResource:
@@ -135,6 +141,18 @@ def rank_resource(resource: CrawlResource, root_url: str) -> RankedResource:
 def _rank_sort_key(ranked: RankedResource) -> tuple[int, float, str]:
     section_priority = SECTION_PRIORITY.get(ranked.section, SECTION_PRIORITY["Optional"])
     return (section_priority, -ranked.score, ranked.resource.url)
+
+
+def _apply_section_caps(ranked_resources: list[RankedResource]) -> list[RankedResource]:
+    capped: list[RankedResource] = []
+    image_count = 0
+    for ranked in ranked_resources:
+        if ranked.section == "Images":
+            if image_count >= MAX_IMAGE_RESOURCES:
+                continue
+            image_count += 1
+        capped.append(ranked)
+    return capped
 
 
 def _base_score(resource_type: ResourceType, is_homepage: bool) -> float:
@@ -211,7 +229,7 @@ def _low_value_penalty(path_tokens: set[str], url: str) -> float:
     if matches:
         penalty += 70.0
     if urlparse(url).query:
-        penalty += 15.0
+        penalty += 40.0
     return penalty
 
 
@@ -247,6 +265,10 @@ def _path_tokens(url: str) -> set[str]:
         if not normalized:
             continue
         tokens.add(normalized)
+        stem = PurePosixPath(normalized).stem
+        if stem and stem != normalized:
+            tokens.add(stem)
+            tokens.update(token for token in stem.replace("_", "-").split("-") if token)
         tokens.update(token for token in normalized.replace("_", "-").split("-") if token)
     return tokens
 
