@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.config import STORAGE_DIR
 from app.db import SessionLocal
 from app.models import Page, Scan
+from app.services.change_detector import summarize_changes
 from app.services.crawler import CrawlConfig, CrawlResource, crawl_site
 from app.services.formatter import LlmResource, render_llms_txt, validate_llms_txt
 from app.services.resource_classifier import ResourceType
@@ -68,6 +69,13 @@ def _run_scan(scan_id: int, db: Session) -> None:
         output_path = Path(output_name)
         (STORAGE_DIR / output_path).write_text(content, encoding="utf-8")
 
+        previous_scan = _previous_completed_scan(db, scan)
+        if previous_scan is not None:
+            scan.previous_scan_id = previous_scan.id
+            previous_pages = _included_pages_for_scan(db, previous_scan.id)
+            current_pages = _included_pages_for_scan(db, scan.id)
+            scan.change_summary = summarize_changes(previous_pages, current_pages).to_json()
+
         scan.output_path = str(output_path)
         scan.status = "complete"
         scan.finished_at = datetime.utcnow()
@@ -84,6 +92,31 @@ def _site_name_from_url(url: str) -> str:
 
     host = url.split("//", 1)[-1].split("/", 1)[0]
     return host.removeprefix("www.")
+
+
+def _previous_completed_scan(db: Session, scan: Scan) -> Scan | None:
+    """Find the newest completed scan for the same site before this scan."""
+
+    return (
+        db.query(Scan)
+        .filter(Scan.normalized_root_url == scan.normalized_root_url)
+        .filter(Scan.status == "complete")
+        .filter(Scan.id != scan.id)
+        .order_by(Scan.version_number.desc(), Scan.id.desc())
+        .first()
+    )
+
+
+def _included_pages_for_scan(db: Session, scan_id: int) -> list[Page]:
+    """Return included page snapshots for change detection."""
+
+    return (
+        db.query(Page)
+        .filter(Page.scan_id == scan_id)
+        .filter(Page.included.is_(True))
+        .order_by(Page.id.asc())
+        .all()
+    )
 
 
 def _page_from_resource(scan_id: int, resource: CrawlResource) -> Page:

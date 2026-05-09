@@ -22,7 +22,15 @@ from sqlalchemy.orm import Session
 from app.config import APP_NAME, BASE_DIR, STORAGE_DIR
 from app.db import get_db, init_db
 from app.models import Scan
-from app.schemas import ScanCreate, ScanCreated, ScanHistory, ScanHistoryItem, ScanStatus
+from app.schemas import (
+    ScanChangeSummary,
+    ScanCreate,
+    ScanCreated,
+    ScanHistory,
+    ScanHistoryItem,
+    ScanStatus,
+)
+from app.services.change_detector import parse_change_summary
 from app.services.scanner import run_scan
 from app.services.security import UnsafeUrlError, assert_safe_url
 from app.services.url_utils import normalize_root_url
@@ -119,6 +127,8 @@ def get_scan(scan_id: int, db: Session = Depends(get_db)) -> ScanStatus:
     return ScanStatus(
         scan_id=scan.id,
         version_number=scan.version_number,
+        previous_scan_id=scan.previous_scan_id,
+        change_summary=_change_summary_for(scan),
         status=scan.status,
         root_url=scan.normalized_root_url,
         pages_found=scan.pages_found,
@@ -155,6 +165,8 @@ def _scan_history_item(scan: Scan) -> ScanHistoryItem:
     return ScanHistoryItem(
         scan_id=scan.id,
         version_number=scan.version_number,
+        previous_scan_id=scan.previous_scan_id,
+        change_summary=_change_summary_for(scan),
         status=scan.status,
         pages_found=scan.pages_found,
         pages_included=scan.pages_included,
@@ -171,6 +183,20 @@ def _download_url_for(scan: Scan) -> str | None:
     if scan.status == "complete" and scan.output_path:
         return f"/download/{scan.id}"
     return None
+
+
+def _change_summary_for(scan: Scan) -> ScanChangeSummary | None:
+    """Parse a stored change summary into the API response shape."""
+
+    summary = parse_change_summary(scan.change_summary)
+    if summary is None:
+        return None
+    return ScanChangeSummary(
+        added=summary.added,
+        removed=summary.removed,
+        changed=summary.changed,
+        unchanged=summary.unchanged,
+    )
 
 
 def _next_version_number(db: Session, normalized_root_url: str) -> int:

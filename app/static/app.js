@@ -33,7 +33,9 @@ async function pollScan(scanId) {
 
   if (scan.status === "complete") {
     const pageLabel = scan.pages_included === 1 ? "page" : "pages";
-    setStatus(`Complete. Version ${scan.version_number}. ${scan.pages_included} ${pageLabel} included.`);
+    const changeText = formatChangeSummary(scan.change_summary);
+    const suffix = changeText ? ` ${changeText}.` : "";
+    setStatus(`Complete. Version ${scan.version_number}. ${scan.pages_included} ${pageLabel} included.${suffix}`);
     renderResult(scan);
     loadHistory(scan.root_url);
     return;
@@ -123,7 +125,12 @@ function createHistoryRow(scan) {
 
   const detail = document.createElement("span");
   const pageLabel = scan.pages_included === 1 ? "page" : "pages";
-  detail.textContent = `${scan.status} · ${scan.pages_included} ${pageLabel} included`;
+  const parts = [`${scan.status}`, `${scan.pages_included} ${pageLabel} included`];
+  const changeText = formatChangeSummary(scan.change_summary);
+  if (changeText) {
+    parts.push(changeText);
+  }
+  detail.textContent = parts.join(" · ");
 
   summary.append(title, detail);
   row.append(summary);
@@ -136,4 +143,11 @@ function createHistoryRow(scan) {
   }
 
   return row;
+}
+
+function formatChangeSummary(summary) {
+  if (!summary) {
+    return "";
+  }
+  return `+${summary.added} added, -${summary.removed} removed, ${summary.changed} changed`;
 }

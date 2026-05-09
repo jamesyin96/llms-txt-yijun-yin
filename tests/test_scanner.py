@@ -2,6 +2,7 @@ from pathlib import Path
 
 from app.db import Base
 from app.models import Page, Scan
+from app.services.change_detector import ChangeSummary, parse_change_summary
 from app.services.crawler import CrawlResource, CrawlResult
 from app.services.formatter import validate_llms_txt
 from app.services.resource_classifier import ResourceType
@@ -123,6 +124,94 @@ def test_run_scan_groups_common_page_types_into_sections(tmp_path, monkeypatch):
     assert "## Articles" in generated
     assert "## Company" in generated
     assert "## Support" in generated
+
+
+def test_run_scan_stores_change_summary_against_previous_completed_scan(tmp_path, monkeypatch):
+    import app.config as config
+    import app.services.scanner as scanner
+
+    monkeypatch.setattr(config, "STORAGE_DIR", tmp_path)
+    monkeypatch.setattr(scanner, "STORAGE_DIR", tmp_path)
+    crawls = [
+        CrawlResult(
+            root_url="https://example.com/",
+            resources=(
+                CrawlResource(
+                    url="https://example.com/",
+                    resource_type=ResourceType.HTML,
+                    title="Home",
+                ),
+                CrawlResource(
+                    url="https://example.com/docs",
+                    resource_type=ResourceType.HTML,
+                    title="Docs",
+                ),
+                CrawlResource(
+                    url="https://example.com/blog",
+                    resource_type=ResourceType.HTML,
+                    title="Blog",
+                ),
+            ),
+        ),
+        CrawlResult(
+            root_url="https://example.com/",
+            resources=(
+                CrawlResource(
+                    url="https://example.com/",
+                    resource_type=ResourceType.HTML,
+                    title="Home",
+                ),
+                CrawlResource(
+                    url="https://example.com/docs",
+                    resource_type=ResourceType.HTML,
+                    title="Documentation",
+                ),
+                CrawlResource(
+                    url="https://example.com/pricing",
+                    resource_type=ResourceType.HTML,
+                    title="Pricing",
+                ),
+            ),
+        ),
+    ]
+
+    def next_crawl(root_url, crawl_config):
+        return crawls.pop(0)
+
+    monkeypatch.setattr(scanner, "crawl_site", next_crawl)
+
+    db = _fresh_db_session(tmp_path)
+    first_scan = Scan(
+        root_url="example.com",
+        normalized_root_url="https://example.com/",
+        version_number=1,
+        status="queued",
+    )
+    second_scan = Scan(
+        root_url="example.com",
+        normalized_root_url="https://example.com/",
+        version_number=2,
+        status="queued",
+    )
+    db.add_all([first_scan, second_scan])
+    db.commit()
+    db.refresh(first_scan)
+    db.refresh(second_scan)
+
+    _run_scan(first_scan.id, db)
+    _run_scan(second_scan.id, db)
+
+    db.refresh(first_scan)
+    db.refresh(second_scan)
+    assert first_scan.previous_scan_id is None
+    assert first_scan.change_summary is None
+    assert second_scan.previous_scan_id == first_scan.id
+    assert parse_change_summary(second_scan.change_summary) == ChangeSummary(
+        added=1,
+        removed=1,
+        changed=1,
+        unchanged=1,
+    )
 
 
 def test_run_scan_marks_scan_failed_when_crawler_raises(tmp_path, monkeypatch):

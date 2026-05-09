@@ -20,11 +20,22 @@ class ScanCreated(BaseModel):
     status: str
 
 
+class ScanChangeSummary(BaseModel):
+    """Compact added/removed/changed counts for a re-scan."""
+
+    added: int
+    removed: int
+    changed: int
+    unchanged: int
+
+
 class ScanStatus(BaseModel):
     """Polling response used by the browser while a scan is running."""
 
     scan_id: int
     version_number: int
+    previous_scan_id: Optional[int] = None
+    change_summary: Optional[ScanChangeSummary] = None
     status: str
     root_url: str
     pages_found: int
@@ -38,6 +49,8 @@ class ScanHistoryItem(BaseModel):
 
     scan_id: int
     version_number: int
+    previous_scan_id: Optional[int] = None
+    change_summary: Optional[ScanChangeSummary] = None
     status: str
     pages_found: int
     pages_included: int

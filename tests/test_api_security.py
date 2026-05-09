@@ -4,6 +4,7 @@ from uuid import uuid4
 from app.db import SessionLocal, init_db
 from app.main import app
 from app.models import Scan
+from app.services.change_detector import ChangeSummary
 
 
 init_db()
@@ -95,6 +96,8 @@ def test_scan_history_includes_download_url_for_completed_versions(monkeypatch) 
         scan = db.get(Scan, scan_id)
         assert scan is not None
         scan.status = "complete"
+        scan.previous_scan_id = scan_id - 1
+        scan.change_summary = ChangeSummary(added=2, removed=1, changed=3, unchanged=4).to_json()
         scan.output_path = f"scan-{scan.id}-v{scan.version_number}-llms.txt"
         db.commit()
     finally:
@@ -104,6 +107,13 @@ def test_scan_history_includes_download_url_for_completed_versions(monkeypatch) 
 
     assert response.status_code == 200
     assert response.json()["scans"][0]["download_url"] == f"/download/{scan_id}"
+    assert response.json()["scans"][0]["previous_scan_id"] == scan_id - 1
+    assert response.json()["scans"][0]["change_summary"] == {
+        "added": 2,
+        "removed": 1,
+        "changed": 3,
+        "unchanged": 4,
+    }
 
 
 def test_scan_history_rejects_unsafe_url() -> None:

@@ -25,6 +25,7 @@ Python/FastAPI web app that accepts a website URL, scans it, and returns a downl
 - Per-site version numbers for repeated scans of the same normalized URL.
 - Versioned generated files, stored as `scan-{scan_id}-v{version_number}-llms.txt`.
 - Version history display for repeated scans of the same website.
+- Metadata-based change summaries for repeated scans.
 
 ## Local Setup
 
@@ -111,6 +112,7 @@ In the browser:
 5. Confirm the downloaded file starts with an H1 title, includes a blockquote summary when available, and contains Markdown links under section headings.
 6. Confirm the Version History list shows the completed scan.
 7. Enter the same website URL again and confirm the next completed scan shows the next version number while the older version remains downloadable in history.
+8. Confirm the newer history row shows a compact change summary, such as `+0 added, -0 removed, 0 changed`.
 
 Optional API-only check:
 
@@ -130,6 +132,8 @@ curl -s http://127.0.0.1:8000/download/1
 
 The API status and history responses include both a global `scan_id` and a per-site `version_number`. The `scan_id` is the database primary key across all websites. The `version_number` increases only for scans with the same normalized root URL, so scanning `example.com`, then another site, then `example.com` again creates `example.com` versions 1 and 2 while preserving each scan row and generated file separately.
 
+When a repeated scan completes, the app compares it with the previous completed scan for the same normalized URL. V1 change detection is metadata-based: it matches pages by canonical URL or URL and counts added, removed, changed, and unchanged pages based on title, description, resource type, and section.
+
 Recent verified state:
 
 - `pytest -q` passes.
@@ -139,8 +143,8 @@ Recent verified state:
 ## Remaining Work
 
 - Improve ranking beyond simple URL/category heuristics.
-- Add change detection between stored versions.
 - Add broader manual quality testing across docs, blogs, marketing sites, and PDF-heavy sites.
+- Add detailed change views with exact added, removed, and changed URLs.
 - Add deployment instructions after local testing is stable.
 
 ## Render Free Tier
