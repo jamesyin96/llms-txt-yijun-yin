@@ -41,6 +41,16 @@ p {
 }
 
 form {
+  width: 100%;
+}
+
+.form-stack {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+}
+
+.primary-controls {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 12px;
@@ -71,6 +81,45 @@ button {
 
 button:hover {
   background: #12564f;
+}
+
+.advanced-settings {
+  width: min(560px, 100%);
+  max-width: 560px;
+}
+
+.advanced-settings summary {
+  display: inline-flex;
+  align-items: center;
+  color: #17685f;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  min-height: 28px;
+  outline-offset: 3px;
+}
+
+.advanced-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 8px;
+  padding-top: 2px;
+}
+
+.advanced-grid label {
+  display: grid;
+  gap: 6px;
+}
+
+.advanced-grid span {
+  color: #53606d;
+  font-size: 14px;
+}
+
+.advanced-grid input {
+  height: 44px;
+  padding: 0 12px;
 }
 
 .status {
@@ -150,7 +199,8 @@ button:hover {
 }
 
 @media (max-width: 560px) {
-  form {
+  .primary-controls,
+  .advanced-grid {
     grid-template-columns: 1fr;
   }
 

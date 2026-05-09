@@ -1,5 +1,8 @@
 const form = document.querySelector("[data-scan-form]");
 const input = document.querySelector("[data-url-input]");
+const crawlMaxPagesInput = document.querySelector("[data-crawl-max-pages]");
+const crawlMaxDepthInput = document.querySelector("[data-crawl-max-depth]");
+const crawlMaxDurationInput = document.querySelector("[data-crawl-max-duration]");
 const statusEl = document.querySelector("[data-status]");
 const resultEl = document.querySelector("[data-result]");
 
@@ -12,7 +15,7 @@ form.addEventListener("submit", async (event) => {
     const response = await fetch("/api/scans", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: input.value }),
+      body: JSON.stringify(scanPayload()),
     });
 
     if (!response.ok) {
@@ -26,6 +29,15 @@ form.addEventListener("submit", async (event) => {
     setStatus(error.message, true);
   }
 });
+
+function scanPayload() {
+  return {
+    url: input.value,
+    crawl_max_pages: Number(crawlMaxPagesInput.value),
+    crawl_max_depth: Number(crawlMaxDepthInput.value),
+    crawl_max_duration_seconds: Number(crawlMaxDurationInput.value),
+  };
+}
 
 async function pollScan(scanId) {
   const response = await fetch(`/api/scans/${scanId}`);

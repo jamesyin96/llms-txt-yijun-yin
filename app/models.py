@@ -12,6 +12,7 @@ from typing import Optional
 from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.config import CRAWL_MAX_DEPTH, CRAWL_MAX_DURATION_SECONDS, CRAWL_MAX_PAGES
 from app.db import Base
 
 
@@ -25,6 +26,13 @@ class Scan(Base):
     normalized_root_url: Mapped[str] = mapped_column(String(2048), nullable=False)
     version_number: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     status: Mapped[str] = mapped_column(String(32), default="queued", nullable=False)
+    crawl_max_pages: Mapped[int] = mapped_column(Integer, default=CRAWL_MAX_PAGES, nullable=False)
+    crawl_max_depth: Mapped[int] = mapped_column(Integer, default=CRAWL_MAX_DEPTH, nullable=False)
+    crawl_max_duration_seconds: Mapped[float] = mapped_column(
+        Float,
+        default=CRAWL_MAX_DURATION_SECONDS,
+        nullable=False,
+    )
     pages_found: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     pages_included: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     output_path: Mapped[Optional[str]] = mapped_column(String(2048), nullable=True)

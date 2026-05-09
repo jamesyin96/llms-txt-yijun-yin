@@ -47,7 +47,11 @@ def _run_scan(scan_id: int, db: Session) -> None:
 
         crawl_result = crawl_site(
             scan.normalized_root_url,
-            crawl_config=CrawlConfig(max_pages=100, max_depth=2),
+            crawl_config=CrawlConfig(
+                max_pages=scan.crawl_max_pages,
+                max_depth=scan.crawl_max_depth,
+                max_duration_seconds=scan.crawl_max_duration_seconds,
+            ),
         )
         ranked_resources = rank_resources(crawl_result.resources, scan.normalized_root_url)
         pages = [_page_from_ranked_resource(scan.id, ranked) for ranked in ranked_resources]

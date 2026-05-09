@@ -13,7 +13,13 @@ from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-from app.config import DATABASE_URL, STORAGE_DIR
+from app.config import (
+    CRAWL_MAX_DEPTH,
+    CRAWL_MAX_DURATION_SECONDS,
+    CRAWL_MAX_PAGES,
+    DATABASE_URL,
+    STORAGE_DIR,
+)
 
 
 class Base(DeclarativeBase):
@@ -65,7 +71,29 @@ def _run_lightweight_migrations() -> None:
             connection.execute(
                 text("ALTER TABLE scans ADD COLUMN version_number INTEGER NOT NULL DEFAULT 1")
             )
+    _add_column_if_missing(
+        scan_columns,
+        "crawl_max_pages",
+        f"INTEGER NOT NULL DEFAULT {CRAWL_MAX_PAGES}",
+    )
+    _add_column_if_missing(
+        scan_columns,
+        "crawl_max_depth",
+        f"INTEGER NOT NULL DEFAULT {CRAWL_MAX_DEPTH}",
+    )
+    _add_column_if_missing(
+        scan_columns,
+        "crawl_max_duration_seconds",
+        f"FLOAT NOT NULL DEFAULT {CRAWL_MAX_DURATION_SECONDS}",
+    )
     _backfill_scan_versions()
+
+
+def _add_column_if_missing(existing_columns: set[str], column_name: str, definition: str) -> None:
+    if column_name in existing_columns:
+        return
+    with engine.begin() as connection:
+        connection.execute(text(f"ALTER TABLE scans ADD COLUMN {column_name} {definition}"))
 
 
 def _backfill_scan_versions() -> None:

@@ -82,6 +82,52 @@ def test_run_scan_persists_crawl_resources_and_generated_file(tmp_path, monkeypa
     assert validate_llms_txt(generated).valid
 
 
+def test_run_scan_uses_scan_specific_crawl_settings(tmp_path, monkeypatch):
+    import app.config as config
+    import app.services.scanner as scanner
+
+    observed_config = None
+
+    def fake_crawl(root_url, crawl_config):
+        nonlocal observed_config
+        observed_config = crawl_config
+        return CrawlResult(
+            root_url=root_url,
+            resources=(
+                CrawlResource(
+                    url=root_url,
+                    resource_type=ResourceType.HTML,
+                    title="Example Site",
+                ),
+            ),
+        )
+
+    monkeypatch.setattr(config, "STORAGE_DIR", tmp_path)
+    monkeypatch.setattr(scanner, "STORAGE_DIR", tmp_path)
+    monkeypatch.setattr(scanner, "crawl_site", fake_crawl)
+
+    db = _fresh_db_session(tmp_path)
+    scan = Scan(
+        root_url="example.com",
+        normalized_root_url="https://example.com/",
+        version_number=1,
+        crawl_max_pages=7,
+        crawl_max_depth=1,
+        crawl_max_duration_seconds=9.5,
+        status="queued",
+    )
+    db.add(scan)
+    db.commit()
+    db.refresh(scan)
+
+    _run_scan(scan.id, db)
+
+    assert observed_config is not None
+    assert observed_config.max_pages == 7
+    assert observed_config.max_depth == 1
+    assert observed_config.max_duration_seconds == 9.5
+
+
 def test_run_scan_groups_common_page_types_into_sections(tmp_path, monkeypatch):
     import app.config as config
     import app.services.scanner as scanner

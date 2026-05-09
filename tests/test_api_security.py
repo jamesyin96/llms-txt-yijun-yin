@@ -60,6 +60,50 @@ def test_scan_status_includes_version_number(monkeypatch) -> None:
     assert response.json()["version_number"] == created.json()["version_number"]
 
 
+def test_scan_endpoint_accepts_advanced_crawl_settings(monkeypatch) -> None:
+    import app.main as main
+
+    monkeypatch.setattr(main, "run_scan", lambda scan_id: None)
+    response = client.post(
+        "/api/scans",
+        json={
+            "url": f"https://advanced-{uuid4().hex}.example.com/",
+            "crawl_max_pages": 25,
+            "crawl_max_depth": 1,
+            "crawl_max_duration_seconds": 12,
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["crawl_max_pages"] == 25
+    assert data["crawl_max_depth"] == 1
+    assert data["crawl_max_duration_seconds"] == 12
+
+    status = client.get(f"/api/scans/{data['scan_id']}")
+    assert status.status_code == 200
+    assert status.json()["crawl_max_pages"] == 25
+    assert status.json()["crawl_max_depth"] == 1
+    assert status.json()["crawl_max_duration_seconds"] == 12
+
+
+def test_scan_endpoint_rejects_out_of_range_crawl_settings(monkeypatch) -> None:
+    import app.main as main
+
+    monkeypatch.setattr(main, "run_scan", lambda scan_id: None)
+    response = client.post(
+        "/api/scans",
+        json={
+            "url": f"https://advanced-invalid-{uuid4().hex}.example.com/",
+            "crawl_max_pages": 0,
+            "crawl_max_depth": 6,
+            "crawl_max_duration_seconds": 61,
+        },
+    )
+
+    assert response.status_code == 422
+
+
 def test_scan_history_lists_versions_for_one_site(monkeypatch) -> None:
     import app.main as main
 

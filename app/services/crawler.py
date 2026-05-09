@@ -7,6 +7,7 @@ formatting can evolve separately.
 
 from dataclasses import dataclass, field
 from hashlib import sha256
+from time import monotonic
 from typing import Protocol
 
 import httpx
@@ -31,6 +32,7 @@ class CrawlConfig:
 
     max_pages: int = 100
     max_depth: int = 2
+    max_duration_seconds: float = 30.0
 
 
 @dataclass(frozen=True)
@@ -134,12 +136,23 @@ def crawl_site(
     resources: list[CrawlResource] = []
     skipped: list[SkippedUrl] = []
     errors: list[CrawlError] = []
+    started_at = monotonic()
 
     _enqueue(queue, queued_urls, _QueueItem(normalized_root_url, depth=0, source_url=None))
     for sitemap_url in sitemap_result.page_urls:
         _enqueue(queue, queued_urls, _QueueItem(sitemap_url, depth=0, source_url="sitemap"))
 
     while queue and len(resources) < config.max_pages:
+        if _crawl_deadline_exceeded(started_at, config.max_duration_seconds):
+            skipped.append(
+                SkippedUrl(
+                    normalized_root_url,
+                    "Crawl stopped after reaching the time budget.",
+                    None,
+                )
+            )
+            break
+
         item = queue.pop(0)
         if item.url in seen_urls:
             continue
@@ -319,3 +332,7 @@ def _looks_like_html(content_type: str) -> bool:
 
 def _content_hash(content: bytes) -> str:
     return sha256(content).hexdigest()
+
+
+def _crawl_deadline_exceeded(started_at: float, max_duration_seconds: float) -> bool:
+    return max_duration_seconds > 0 and monotonic() - started_at >= max_duration_seconds

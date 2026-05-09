@@ -55,10 +55,18 @@ def canonicalize_discovered_url(raw_url: str, *, base_url: str) -> str:
 
 
 def is_same_hostname(url: str, root_url: str) -> bool:
-    """Return whether `url` has the same hostname as `root_url`."""
+    """Return whether `url` has the same hostname as `root_url`.
+
+    Root and `www.` host variants are treated as equivalent for normal website
+    redirects, while unrelated subdomains remain outside the crawl boundary.
+    """
 
     url_host = urlparse(url).hostname
     root_host = urlparse(root_url).hostname
     if not url_host or not root_host:
         return False
-    return url_host.rstrip(".").lower() == root_host.rstrip(".").lower()
+    return _without_leading_www(url_host) == _without_leading_www(root_host)
+
+
+def _without_leading_www(hostname: str) -> str:
+    return hostname.rstrip(".").lower().removeprefix("www.")

@@ -4,7 +4,7 @@ Python/FastAPI web app that accepts a website URL, scans it, and returns a downl
 
 ## What Works Now
 
-- Plain HTML frontend with a centered URL input and Go button.
+- Plain HTML frontend with a centered URL input, Go button, and expandable Advanced Settings.
 - FastAPI backend.
 - SQLite local database.
 - Local generated file storage under `storage/`.
@@ -17,6 +17,7 @@ Python/FastAPI web app that accepts a website URL, scans it, and returns a downl
 - Safe HTTP fetcher with timeout, retry, redirect checks, and response-size limits.
 - `robots.txt` fetching and allow/disallow handling.
 - Sitemap-first discovery with `/sitemap.xml` fallback.
+- Configurable crawl limits: 100 resources, depth 2, and a 30-second crawl budget by default.
 - Homepage/internal HTML link extraction.
 - Metadata extraction from title, meta description, canonical URL, headings, and link context.
 - Heuristic page ranking and section assignment.
@@ -74,6 +75,23 @@ Leave the conda environment:
 conda deactivate
 ```
 
+Optional default crawl tuning:
+
+```bash
+export CRAWL_MAX_PAGES=100
+export CRAWL_MAX_DEPTH=2
+export CRAWL_MAX_DURATION_SECONDS=30
+uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+These environment variables set the defaults shown in Advanced Settings. The user can still override them per scan in the browser.
+
+Advanced Settings bounds:
+
+- Max pages: 1 to 500.
+- Max depth: 0 to 5.
+- Time budget: 1 to 60 seconds.
+
 ## Testing
 
 Run the test suite:
@@ -107,13 +125,16 @@ http://127.0.0.1:8000
 In the browser:
 
 1. Enter a public website URL, such as `example.com`.
-2. Click `Go`.
-3. Wait for the status to complete.
-4. Click the versioned download link, such as `Download llms-v1.txt`.
-5. Confirm the downloaded file starts with an H1 title, includes a blockquote summary when available, and contains Markdown links under section headings.
-6. Confirm the Version History list shows the completed scan.
-7. Enter the same website URL again and confirm the next completed scan shows the next version number while the older version remains downloadable in history.
-8. Confirm the newer history row shows a compact change summary, such as `+0 added, -0 removed, 0 changed`.
+2. Optional: expand `Advanced Settings` and adjust max pages, max depth, or time budget.
+3. Click `Go`.
+4. Wait for the status to complete.
+5. Click the versioned download link, such as `Download llms-v1.txt`.
+6. Confirm the downloaded file starts with an H1 title, includes a blockquote summary when available, and contains Markdown links under section headings.
+7. Confirm the Version History list shows the completed scan.
+8. Enter the same website URL again and confirm the next completed scan shows the next version number while the older version remains downloadable in history.
+9. Confirm the newer history row shows a compact change summary, such as `+0 added, -0 removed, 0 changed`.
+
+Redirect note: the crawler stays within one website hostname for safety. Root and `www.` variants are treated as the same site, so redirects like `google.com` to `www.google.com` are allowed. Redirects to unrelated subdomains or different domains are blocked.
 
 Optional API-only check:
 
@@ -137,9 +158,11 @@ When a repeated scan completes, the app compares it with the previous completed 
 
 V1 ranking is heuristic and explainable. The ranker prioritizes the homepage, documentation, guides, product/pricing pages, support pages, company pages, articles, meaningful PDFs, and meaningful images. It downranks or excludes low-value URLs such as login, checkout, search, tag/archive, feed, legal, privacy, and terms pages.
 
+Large sites can still take longer than small sites because the crawler follows sitemaps and internal links within the configured limits. For quick smoke tests, `example.com` is the fastest known-good URL. Search engines and large multilingual sites may produce less useful output than product, docs, or company websites. Use Advanced Settings to reduce max pages, depth, or time budget for faster tests.
+
 Recent verified state:
 
-- `pytest -q` passes.
+- `pytest -q` passes with 112 tests.
 - Real generated `llms.txt` tested with `example.com` through the web app flow.
 - Real crawler/formatter output tested with `https://www.djangoproject.com/`.
 - Bounded real-site ranking check tested with `https://www.djangoproject.com/`.
@@ -147,17 +170,50 @@ Recent verified state:
 
 ## Remaining Work
 
-- Add broader manual quality testing across docs, blogs, marketing sites, and PDF-heavy sites.
 - Tune ranking rules from manual tests across richer public websites.
 - Add detailed change views with exact added, removed, and changed URLs.
-- Add deployment instructions after local testing is stable.
+- Deploy a free-tier demo and run the hosted smoke checklist below.
 
 ## Render Free Tier
 
-The first hosted demo can use Render's free web service tier. SQLite data and generated files are stored on the regular filesystem, which is ephemeral on Render. Download links are best-effort and may disappear after restart or redeploy.
+The first hosted demo can use Render's free web service tier. SQLite data and generated files are stored on the regular filesystem, which is ephemeral on Render. Download links are best-effort and may disappear after restart, redeploy, or cold-start replacement.
+
+Recommended Render settings:
+
+- Service type: Web Service.
+- Runtime: Python.
+- Build command: `pip install -r requirements.txt`.
+- Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`.
+- Instance type: Free.
+- Persistent disk: none for the demo.
+- Database: local SQLite file at `storage/app.sqlite3`.
+- Generated files: local files under `storage/`.
+- Optional environment variables:
+  - `CRAWL_MAX_PAGES=100`
+  - `CRAWL_MAX_DEPTH=2`
+  - `CRAWL_MAX_DURATION_SECONDS=30`
+
+Render will provide the `$PORT` environment variable. The app creates `storage/` and SQLite tables at startup.
+
+Operational caveats:
+
+- Data is not durable on the free tier.
+- If the service restarts or redeploys, previous scan history and download files may disappear.
+- For a demo, open the app shortly before presenting and generate a fresh `llms.txt`.
+- If reliable persistence becomes important, upgrade to a paid Render service with a persistent disk or move data to Postgres/object storage.
 
 Render start command:
 
 ```bash
 uvicorn app.main:app --host 0.0.0.0 --port $PORT
 ```
+
+Hosted demo smoke checklist:
+
+1. Open the Render service URL.
+2. Enter `example.com`.
+3. Wait for the scan to complete.
+4. Download the generated `llms.txt`.
+5. Confirm the file starts with `# Example Domain` and contains a `## Key Pages` section.
+6. Run `example.com` again.
+7. Confirm the second scan has the next version number and a compact change summary.

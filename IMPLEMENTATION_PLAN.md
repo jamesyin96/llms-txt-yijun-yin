@@ -61,6 +61,7 @@ This stack keeps the project Python-first and avoids React. The frontend can sta
 ## V1 Product Decisions
 
 - Keep the frontend intentionally minimal.
+- Put crawl-limit controls behind an expandable Advanced Settings section.
 - Do not build a React app.
 - Do not show an editable `llms.txt` preview in V1.
 - Do not build include/exclude controls in V1.
@@ -311,11 +312,27 @@ Initial crawl settings:
 
 - Max pages: 100.
 - Max depth: 2.
+- Max crawl duration: 30 seconds by default.
 - Request timeout: 10 seconds.
 - Retries: 3 attempts with backoff.
 - Same host only.
 - HTML pages are fetched for metadata and link discovery.
 - PDF and qualifying image URLs are included in output but not deeply parsed in V1.
+
+Crawl limits are configurable with environment variables:
+
+- `CRAWL_MAX_PAGES`
+- `CRAWL_MAX_DEPTH`
+- `CRAWL_MAX_DURATION_SECONDS`
+
+These environment variables set default values. Users can override the same
+limits per scan from the web form's Advanced Settings section.
+
+User-facing Advanced Settings bounds:
+
+- Max pages: 1 to 500.
+- Max depth: 0 to 5.
+- Time budget: 1 to 60 seconds.
 
 PDF and image handling:
 

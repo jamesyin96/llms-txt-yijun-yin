@@ -3,13 +3,22 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+from app.config import CRAWL_MAX_DEPTH, CRAWL_MAX_DURATION_SECONDS, CRAWL_MAX_PAGES
 
 
 class ScanCreate(BaseModel):
     """Payload submitted by the browser when a user starts a scan."""
 
     url: str
+    crawl_max_pages: int = Field(default=CRAWL_MAX_PAGES, ge=1, le=500)
+    crawl_max_depth: int = Field(default=CRAWL_MAX_DEPTH, ge=0, le=5)
+    crawl_max_duration_seconds: float = Field(
+        default=CRAWL_MAX_DURATION_SECONDS,
+        ge=1.0,
+        le=60.0,
+    )
 
 
 class ScanCreated(BaseModel):
@@ -17,6 +26,9 @@ class ScanCreated(BaseModel):
 
     scan_id: int
     version_number: int
+    crawl_max_pages: int
+    crawl_max_depth: int
+    crawl_max_duration_seconds: float
     status: str
 
 
@@ -34,6 +46,9 @@ class ScanStatus(BaseModel):
 
     scan_id: int
     version_number: int
+    crawl_max_pages: int
+    crawl_max_depth: int
+    crawl_max_duration_seconds: float
     previous_scan_id: Optional[int] = None
     change_summary: Optional[ScanChangeSummary] = None
     status: str
@@ -49,6 +64,9 @@ class ScanHistoryItem(BaseModel):
 
     scan_id: int
     version_number: int
+    crawl_max_pages: int
+    crawl_max_depth: int
+    crawl_max_duration_seconds: float
     previous_scan_id: Optional[int] = None
     change_summary: Optional[ScanChangeSummary] = None
     status: str

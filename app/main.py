@@ -19,7 +19,14 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.config import APP_NAME, BASE_DIR, STORAGE_DIR
+from app.config import (
+    APP_NAME,
+    BASE_DIR,
+    CRAWL_MAX_DEPTH,
+    CRAWL_MAX_DURATION_SECONDS,
+    CRAWL_MAX_PAGES,
+    STORAGE_DIR,
+)
 from app.db import get_db, init_db
 from app.models import Scan
 from app.schemas import (
@@ -58,7 +65,16 @@ templates = Jinja2Templates(directory=BASE_DIR / "app" / "templates")
 def index(request: Request):
     """Render the minimal URL input page."""
 
-    return templates.TemplateResponse(request, "index.html", {"app_name": APP_NAME})
+    return templates.TemplateResponse(
+        request,
+        "index.html",
+        {
+            "app_name": APP_NAME,
+            "crawl_max_pages": CRAWL_MAX_PAGES,
+            "crawl_max_depth": CRAWL_MAX_DEPTH,
+            "crawl_max_duration_seconds": CRAWL_MAX_DURATION_SECONDS,
+        },
+    )
 
 
 @app.post("/api/scans", response_model=ScanCreated)
@@ -84,6 +100,9 @@ def create_scan(
         root_url=payload.url,
         normalized_root_url=normalized_url,
         version_number=_next_version_number(db, normalized_url),
+        crawl_max_pages=payload.crawl_max_pages,
+        crawl_max_depth=payload.crawl_max_depth,
+        crawl_max_duration_seconds=payload.crawl_max_duration_seconds,
         status="queued",
     )
     db.add(scan)
@@ -91,7 +110,14 @@ def create_scan(
     db.refresh(scan)
 
     background_tasks.add_task(run_scan, scan.id)
-    return ScanCreated(scan_id=scan.id, version_number=scan.version_number, status=scan.status)
+    return ScanCreated(
+        scan_id=scan.id,
+        version_number=scan.version_number,
+        crawl_max_pages=scan.crawl_max_pages,
+        crawl_max_depth=scan.crawl_max_depth,
+        crawl_max_duration_seconds=scan.crawl_max_duration_seconds,
+        status=scan.status,
+    )
 
 
 @app.get("/api/scans", response_model=ScanHistory)
@@ -127,6 +153,9 @@ def get_scan(scan_id: int, db: Session = Depends(get_db)) -> ScanStatus:
     return ScanStatus(
         scan_id=scan.id,
         version_number=scan.version_number,
+        crawl_max_pages=scan.crawl_max_pages,
+        crawl_max_depth=scan.crawl_max_depth,
+        crawl_max_duration_seconds=scan.crawl_max_duration_seconds,
         previous_scan_id=scan.previous_scan_id,
         change_summary=_change_summary_for(scan),
         status=scan.status,
@@ -165,6 +194,9 @@ def _scan_history_item(scan: Scan) -> ScanHistoryItem:
     return ScanHistoryItem(
         scan_id=scan.id,
         version_number=scan.version_number,
+        crawl_max_pages=scan.crawl_max_pages,
+        crawl_max_depth=scan.crawl_max_depth,
+        crawl_max_duration_seconds=scan.crawl_max_duration_seconds,
         previous_scan_id=scan.previous_scan_id,
         change_summary=_change_summary_for(scan),
         status=scan.status,

@@ -94,6 +94,31 @@ def test_crawler_respects_max_pages_limit() -> None:
     ]
 
 
+def test_crawler_respects_duration_limit(monkeypatch) -> None:
+    import app.services.crawler as crawler
+
+    fetcher = _mapping_fetcher(
+        {
+            "https://example.com/robots.txt": (404, ""),
+            "https://example.com/sitemap.xml": (404, ""),
+        }
+    )
+    times = iter([0.0, 1.0])
+    monkeypatch.setattr(crawler, "monotonic", lambda: next(times))
+
+    result = crawler.crawl_site(
+        ROOT_URL,
+        crawl_config=CrawlConfig(max_duration_seconds=0.5),
+        fetcher=fetcher,
+    )
+
+    assert result.resources == ()
+    assert (
+        "https://example.com/",
+        "Crawl stopped after reaching the time budget.",
+    ) in [(skipped.url, skipped.reason) for skipped in result.skipped]
+
+
 def test_crawler_skips_robots_disallowed_urls() -> None:
     fetcher = _mapping_fetcher(
         {

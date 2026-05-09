@@ -122,6 +122,27 @@ def test_fetch_allows_same_host_redirect() -> None:
     assert result.content == b"final"
 
 
+def test_fetch_allows_root_to_www_redirect_variant() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "example.com":
+            return httpx.Response(
+                302,
+                headers={"location": "https://www.example.com/final"},
+                request=request,
+            )
+        return httpx.Response(200, content=b"final", request=request)
+
+    result = fetch_url(
+        "https://example.com/",
+        config=FetchConfig(resolve_host=False),
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+
+    assert result.final_url == "https://www.example.com/final"
+    assert result.redirect_count == 1
+    assert result.content == b"final"
+
+
 def test_fetch_blocks_redirect_to_localhost() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
@@ -182,4 +203,3 @@ def test_fetch_blocks_oversized_response() -> None:
             ),
             client=httpx.Client(transport=httpx.MockTransport(handler)),
         )
-

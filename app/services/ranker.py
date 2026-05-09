@@ -7,6 +7,7 @@ The rules are intentionally transparent so manual testing can tune them.
 
 from dataclasses import dataclass
 from pathlib import PurePosixPath
+import re
 from urllib.parse import urlparse
 
 from app.services.crawler import CrawlResource
@@ -72,6 +73,7 @@ LOW_VALUE_KEYWORDS = {
     "tag",
     "terms",
 }
+GOOGLE_VERIFICATION_PATH = re.compile(r"/google[0-9a-f]{12,}\.html$")
 
 
 @dataclass(frozen=True)
@@ -228,9 +230,28 @@ def _low_value_penalty(path_tokens: set[str], url: str) -> float:
     penalty = 0.0
     if matches:
         penalty += 70.0
+    if _looks_like_google_verification_file(url):
+        penalty += 80.0
+    if _looks_like_localized_duplicate(url):
+        penalty += 80.0
     if urlparse(url).query:
         penalty += 40.0
     return penalty
+
+
+def _looks_like_google_verification_file(url: str) -> bool:
+    return bool(GOOGLE_VERIFICATION_PATH.search(urlparse(url).path.lower()))
+
+
+def _looks_like_localized_duplicate(url: str) -> bool:
+    parts = [part for part in urlparse(url).path.lower().split("/") if part]
+    return len(parts) >= 2 and parts[0] == "intl" and _looks_like_locale_code(parts[1])
+
+
+def _looks_like_locale_code(value: str) -> bool:
+    normalized = value.replace("_", "-")
+    pieces = normalized.split("-")
+    return 2 <= len(pieces[0]) <= 3 and pieces[0].isalpha()
 
 
 def _has_keyword(tokens: set[str], keywords: tuple[str, ...]) -> bool:

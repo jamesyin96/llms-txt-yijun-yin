@@ -67,6 +67,29 @@ def test_allows_same_hostname_redirects() -> None:
     assert redirected == "https://example.com/about"
 
 
+@pytest.mark.parametrize(
+    ("source_url", "redirect_url", "expected"),
+    [
+        ("https://example.com/", "https://www.example.com/", "https://www.example.com/"),
+        ("https://www.example.com/", "https://example.com/", "https://example.com/"),
+    ],
+)
+def test_allows_root_and_www_redirect_variants(
+    source_url: str,
+    redirect_url: str,
+    expected: str,
+) -> None:
+    with patch("app.services.security.assert_hostname_resolves_publicly"):
+        redirected = validate_redirect_url(source_url, redirect_url)
+
+    assert redirected == expected
+
+
+def test_blocks_unrelated_subdomain_redirects() -> None:
+    with pytest.raises(UnsafeUrlError):
+        validate_redirect_url("https://example.com/", "https://docs.example.com/")
+
+
 def test_blocks_dns_resolution_to_private_address() -> None:
     fake_addr = (socket_family_placeholder(), None, None, "", ("127.0.0.1", 0))
     with patch("socket.getaddrinfo", return_value=[fake_addr]):
@@ -82,4 +105,3 @@ def test_allows_dns_resolution_to_public_address() -> None:
 
 def socket_family_placeholder() -> int:
     return 0
-

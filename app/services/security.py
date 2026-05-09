@@ -27,8 +27,10 @@ URL safety standard:
   Example allowed: `example.com -> 93.184.216.34`
   Example blocked: `metadata.example -> 169.254.169.254`
 
-- Redirects must remain on the same hostname and pass the same safety checks.
+- Redirects must remain on the same hostname, except root/www variants are
+  treated as equivalent, and pass the same safety checks.
   Example allowed: `https://example.com/docs -> /about`
+  Example allowed: `https://example.com/ -> https://www.example.com/`
   Example blocked: `https://example.com/docs -> http://127.0.0.1/admin`
 """
 
@@ -80,7 +82,7 @@ def assert_safe_url(
     hostname = _normalized_hostname(parsed.hostname)
     if not hostname:
         raise UnsafeUrlError("Enter a valid website URL.")
-    if allowed_hostname and hostname != _normalized_hostname(allowed_hostname):
+    if allowed_hostname and not _hostnames_equivalent(hostname, allowed_hostname):
         raise UnsafeUrlError("Crawler redirects must stay on the same hostname.")
 
     _assert_safe_hostname(hostname)
@@ -160,3 +162,15 @@ def _normalized_hostname(hostname: str | None) -> str:
     if not hostname:
         return ""
     return hostname.rstrip(".").lower()
+
+
+def _hostnames_equivalent(hostname: str, allowed_hostname: str) -> bool:
+    normalized = _normalized_hostname(hostname)
+    allowed = _normalized_hostname(allowed_hostname)
+    if not normalized or not allowed:
+        return False
+    return _without_leading_www(normalized) == _without_leading_www(allowed)
+
+
+def _without_leading_www(hostname: str) -> str:
+    return hostname.removeprefix("www.")

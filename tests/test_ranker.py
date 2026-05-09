@@ -183,3 +183,29 @@ def test_query_heavy_list_pages_are_excluded() -> None:
     )
 
     assert ranked.include is False
+
+
+def test_google_verification_files_are_excluded() -> None:
+    ranked = rank_resource(
+        CrawlResource(
+            url="https://example.com/google6a4fcb2609131635.html",
+            resource_type=ResourceType.HTML,
+            title="google6a4fcb2609131635.html",
+        ),
+        ROOT_URL,
+    )
+
+    assert ranked.include is False
+
+
+def test_localized_duplicate_paths_are_excluded() -> None:
+    ranked = rank_resource(
+        CrawlResource(
+            url="https://example.com/intl/zh-CN/chrome/browser-tools/",
+            resource_type=ResourceType.HTML,
+            title="Browser tools",
+        ),
+        ROOT_URL,
+    )
+
+    assert ranked.include is False
