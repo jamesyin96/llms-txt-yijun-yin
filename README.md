@@ -19,6 +19,7 @@ Python/FastAPI web app that accepts a website URL, scans it, and returns a downl
 - Sitemap-first discovery with `/sitemap.xml` fallback.
 - Homepage/internal HTML link extraction.
 - Metadata extraction from title, meta description, canonical URL, headings, and link context.
+- Heuristic page ranking and section assignment.
 - PDF inclusion.
 - Meaningful image inclusion with icon/static-asset filtering.
 - Generated `llms.txt` validation before writing the downloadable file.
@@ -134,16 +135,19 @@ The API status and history responses include both a global `scan_id` and a per-s
 
 When a repeated scan completes, the app compares it with the previous completed scan for the same normalized URL. V1 change detection is metadata-based: it matches pages by canonical URL or URL and counts added, removed, changed, and unchanged pages based on title, description, resource type, and section.
 
+V1 ranking is heuristic and explainable. The ranker prioritizes the homepage, documentation, guides, product/pricing pages, support pages, company pages, articles, meaningful PDFs, and meaningful images. It downranks or excludes low-value URLs such as login, checkout, search, tag/archive, feed, legal, privacy, and terms pages.
+
 Recent verified state:
 
 - `pytest -q` passes.
 - Real generated `llms.txt` tested with `example.com` through the web app flow.
 - Real crawler/formatter output tested with `https://www.djangoproject.com/`.
+- Bounded real-site ranking check tested with `https://www.djangoproject.com/`.
 
 ## Remaining Work
 
-- Improve ranking beyond simple URL/category heuristics.
 - Add broader manual quality testing across docs, blogs, marketing sites, and PDF-heavy sites.
+- Tune ranking rules from manual tests across richer public websites.
 - Add detailed change views with exact added, removed, and changed URLs.
 - Add deployment instructions after local testing is stable.
 

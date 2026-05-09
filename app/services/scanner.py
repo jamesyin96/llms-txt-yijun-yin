@@ -16,6 +16,7 @@ from app.models import Page, Scan
 from app.services.change_detector import summarize_changes
 from app.services.crawler import CrawlConfig, CrawlResource, crawl_site
 from app.services.formatter import LlmResource, render_llms_txt, validate_llms_txt
+from app.services.ranker import RankedResource, rank_resources
 from app.services.resource_classifier import ResourceType
 
 
@@ -48,18 +49,19 @@ def _run_scan(scan_id: int, db: Session) -> None:
             scan.normalized_root_url,
             crawl_config=CrawlConfig(max_pages=100, max_depth=2),
         )
-        pages = [_page_from_resource(scan.id, resource) for resource in crawl_result.resources]
+        ranked_resources = rank_resources(crawl_result.resources, scan.normalized_root_url)
+        pages = [_page_from_ranked_resource(scan.id, ranked) for ranked in ranked_resources]
         db.add_all(pages)
 
         scan.status = "generating"
         scan.pages_found = len(crawl_result.resources) + len(crawl_result.skipped)
-        scan.pages_included = len(crawl_result.resources)
+        scan.pages_included = len(ranked_resources)
         db.commit()
 
         content = render_llms_txt(
             site_name=_site_name_from_crawl(crawl_result.resources, scan.normalized_root_url),
             summary=_summary_from_crawl(crawl_result.resources, scan.normalized_root_url),
-            resources=_llm_resources_from_crawl(crawl_result.resources),
+            resources=_llm_resources_from_ranked(ranked_resources),
         )
         validation = validate_llms_txt(content)
         if not validation.valid:
@@ -119,8 +121,10 @@ def _included_pages_for_scan(db: Session, scan_id: int) -> list[Page]:
     )
 
 
-def _page_from_resource(scan_id: int, resource: CrawlResource) -> Page:
-    """Convert a crawler resource into a persisted page record."""
+def _page_from_ranked_resource(scan_id: int, ranked: RankedResource) -> Page:
+    """Convert a ranked crawler resource into a persisted page record."""
+
+    resource = ranked.resource
 
     return Page(
         scan_id=scan_id,
@@ -129,24 +133,24 @@ def _page_from_resource(scan_id: int, resource: CrawlResource) -> Page:
         title=_resource_title(resource),
         description=_resource_description(resource),
         resource_type=str(resource.resource_type),
-        section=_section_for_resource(resource),
-        score=0.0,
+        section=ranked.section,
+        score=ranked.score,
         status_code=resource.status_code,
         content_hash=resource.content_hash,
         last_crawled_at=datetime.utcnow(),
-        included=True,
+        included=ranked.include,
     )
 
 
-def _llm_resources_from_crawl(resources: tuple[CrawlResource, ...]) -> list[LlmResource]:
+def _llm_resources_from_ranked(ranked_resources: list[RankedResource]) -> list[LlmResource]:
     return [
         LlmResource(
-            title=_resource_title(resource),
-            url=resource.url,
-            description=_resource_description(resource),
-            section=_section_for_resource(resource),
+            title=_resource_title(ranked.resource),
+            url=ranked.resource.url,
+            description=_resource_description(ranked.resource),
+            section=ranked.section,
         )
-        for resource in resources
+        for ranked in ranked_resources
     ]
 
 
@@ -188,33 +192,7 @@ def _resource_description(resource: CrawlResource) -> str:
     return resource.link_text or ""
 
 
-def _section_for_resource(resource: CrawlResource) -> str:
-    if resource.resource_type is ResourceType.PDF:
-        return "Documents"
-    if resource.resource_type is ResourceType.IMAGE:
-        return "Images"
-    path = _path_for_section(resource.url)
-    if any(part in path for part in ("/docs", "/documentation", "/reference", "/api")):
-        return "Documentation"
-    if any(part in path for part in ("/guide", "/guides", "/tutorial", "/learn")):
-        return "Guides"
-    if any(part in path for part in ("/blog", "/weblog", "/news", "/articles")):
-        return "Articles"
-    if any(part in path for part in ("/about", "/company", "/team", "/careers")):
-        return "Company"
-    if any(part in path for part in ("/support", "/help", "/contact", "/faq")):
-        return "Support"
-    return "Key Pages"
-
-
 def _filename_title(url: str) -> str:
     path = url.split("?", 1)[0].rstrip("/")
     filename = path.rsplit("/", 1)[-1]
     return filename.replace("-", " ").replace("_", " ").strip()
-
-
-def _path_for_section(url: str) -> str:
-    path = url.split("://", 1)[-1].split("/", 1)
-    if len(path) == 1:
-        return "/"
-    return f"/{path[1].lower()}"

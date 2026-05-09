@@ -342,25 +342,70 @@ Extract:
 
 ### Page Scoring
 
-Rank pages using signals such as:
+V1 uses a transparent heuristic ranker, not ML or AI. The goal is to make the
+generated `llms.txt` useful and explainable across common website shapes while
+keeping the rules easy to tune after manual testing.
 
-- Homepage priority.
-- URL path importance, such as docs, about, product, pricing, blog, guide, API, support.
-- Presence in sitemap.
-- Descriptive title and metadata.
-- Link frequency from crawled pages.
-- Avoid low-value pages like login, cart, privacy, terms, tag pages, and search pages unless clearly relevant.
+Ranker inputs:
+
+- `CrawlResource.url` and URL path tokens.
+- `resource_type`, especially HTML, PDF, and meaningful image.
+- `title`, `description`, `h1`, `link_text`, and `headings`.
+- Whether the resource is the normalized homepage.
+- Whether the resource came from the sitemap or from a crawled page.
+
+Ranker output:
+
+- `resource`: the original crawl resource.
+- `score`: numeric importance score.
+- `section`: display section for `llms.txt`.
+- `include`: whether the resource should appear in the generated file.
+- `reason`: short explanation for tests/debugging.
+
+Positive scoring signals:
+
+- Homepage: strongest signal; always included as `Key Pages`.
+- Documentation, API, reference, developer, docs paths/titles: high score, section `Documentation`.
+- Guides, tutorials, learn, getting-started paths/titles: high score, section `Guides`.
+- Product, features, solutions, pricing paths/titles: medium-high score, section `Products or Services`.
+- About, company, team, careers paths/titles: medium score, section `Company`.
+- Support, help, contact, FAQ paths/titles: medium score, section `Support`.
+- Blog, news, articles, changelog paths/titles: medium score, section `Articles`.
+- PDFs: medium score when link text/title/filename looks meaningful, section `Documents`.
+- Images: lower score than pages, included only when the crawler has already classified them as meaningful, section `Images`.
+- Descriptive title, description, H1, or link text: small positive boosts.
+
+Negative scoring signals:
+
+- Login, signup, auth, account, dashboard, admin.
+- Cart, checkout, payment, billing.
+- Search result pages and query-heavy URLs.
+- Tag/category/archive/page pagination URLs.
+- Feed, RSS, Atom, print, share, embed.
+- Terms, privacy, cookie, legal, license pages.
+- Very thin metadata, except for the homepage.
+
+V1 inclusion rules:
+
+- Keep the homepage even when metadata is thin.
+- Include resources with score at or above the V1 threshold.
+- Exclude strongly low-value pages even if discovered by sitemap.
+- Sort by section priority, then score descending, then URL.
+- Keep the output cap aligned with crawler max pages: 100 included resources.
 
 ### Section Builder
 
 Suggested default sections:
 
-- `Overview`
+- `Key Pages`
 - `Products or Services`
 - `Documentation`
 - `Guides`
+- `Articles`
 - `Company`
 - `Support`
+- `Documents`
+- `Images`
 - `Optional`
 
 The section builder should only include sections with matching pages. For smaller sites, a simple `Key Pages` section is acceptable.
