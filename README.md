@@ -54,6 +54,20 @@ Then open:
 http://127.0.0.1:8000
 ```
 
+## Render Deploy
+
+This repo includes `.python-version` to pin Render to Python 3.13. The dependency set uses packages with compiled wheels, including `pydantic-core`, so avoid deploying on a newer Python runtime until the pinned dependencies publish compatible wheels.
+
+Recommended Render settings:
+
+```bash
+pip install -r requirements.txt
+```
+
+```bash
+uvicorn app.main:app --host 0.0.0.0 --port $PORT
+```
+
 ## Run And Stop With Conda
 
 Start the local server:
