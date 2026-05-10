@@ -6,6 +6,7 @@ resources and renders the downloadable llms.txt file.
 """
 
 from datetime import datetime
+import logging
 from pathlib import Path
 
 from sqlalchemy.orm import Session
@@ -18,6 +19,9 @@ from app.services.crawler import CrawlConfig, CrawlResource, crawl_site
 from app.services.formatter import LlmResource, render_llms_txt, validate_llms_txt
 from app.services.ranker import RankedResource, rank_resources
 from app.services.resource_classifier import ResourceType
+
+
+logger = logging.getLogger("uvicorn.error")
 
 
 def run_scan(scan_id: int) -> None:
@@ -39,11 +43,22 @@ def _run_scan(scan_id: int, db: Session) -> None:
 
     scan = db.get(Scan, scan_id)
     if scan is None:
+        logger.warning("scan_background_missing scan_id=%s", scan_id)
         return
 
     try:
         scan.status = "crawling"
         db.commit()
+        logger.info(
+            "scan_status scan_id=%s status=%s normalized_root_url=%s "
+            "max_pages=%s max_depth=%s time_budget_seconds=%s",
+            scan.id,
+            scan.status,
+            scan.normalized_root_url,
+            scan.crawl_max_pages,
+            scan.crawl_max_depth,
+            scan.crawl_max_duration_seconds,
+        )
 
         crawl_result = crawl_site(
             scan.normalized_root_url,
@@ -61,6 +76,18 @@ def _run_scan(scan_id: int, db: Session) -> None:
         scan.pages_found = len(crawl_result.resources) + len(crawl_result.skipped)
         scan.pages_included = len(ranked_resources)
         db.commit()
+        logger.info(
+            "scan_status scan_id=%s status=%s normalized_root_url=%s "
+            "pages_found=%s pages_included=%s max_pages=%s max_depth=%s time_budget_seconds=%s",
+            scan.id,
+            scan.status,
+            scan.normalized_root_url,
+            scan.pages_found,
+            scan.pages_included,
+            scan.crawl_max_pages,
+            scan.crawl_max_depth,
+            scan.crawl_max_duration_seconds,
+        )
 
         content = render_llms_txt(
             site_name=_site_name_from_crawl(crawl_result.resources, scan.normalized_root_url),
@@ -86,11 +113,36 @@ def _run_scan(scan_id: int, db: Session) -> None:
         scan.status = "complete"
         scan.finished_at = datetime.utcnow()
         db.commit()
+        logger.info(
+            "scan_status scan_id=%s status=%s normalized_root_url=%s "
+            "pages_found=%s pages_included=%s output_path=%s max_pages=%s max_depth=%s "
+            "time_budget_seconds=%s",
+            scan.id,
+            scan.status,
+            scan.normalized_root_url,
+            scan.pages_found,
+            scan.pages_included,
+            scan.output_path,
+            scan.crawl_max_pages,
+            scan.crawl_max_depth,
+            scan.crawl_max_duration_seconds,
+        )
     except Exception as exc:
         scan.status = "failed"
         scan.error = str(exc)
         scan.finished_at = datetime.utcnow()
         db.commit()
+        logger.exception(
+            "scan_status scan_id=%s status=%s normalized_root_url=%s error=%s "
+            "max_pages=%s max_depth=%s time_budget_seconds=%s",
+            scan.id,
+            scan.status,
+            scan.normalized_root_url,
+            scan.error,
+            scan.crawl_max_pages,
+            scan.crawl_max_depth,
+            scan.crawl_max_duration_seconds,
+        )
 
 
 def _site_name_from_url(url: str) -> str:

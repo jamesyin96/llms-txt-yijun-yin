@@ -11,6 +11,7 @@ V1 exposes a deliberately small surface area:
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+import logging
 
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
@@ -25,9 +26,10 @@ from app.config import (
     CRAWL_MAX_DEPTH,
     CRAWL_MAX_DURATION_SECONDS,
     CRAWL_MAX_PAGES,
+    DATABASE_URL,
     STORAGE_DIR,
 )
-from app.db import get_db, init_db
+from app.db import SessionLocal, get_db, init_db
 from app.models import Scan
 from app.schemas import (
     ScanChangeSummary,
@@ -43,6 +45,9 @@ from app.services.security import UnsafeUrlError, assert_safe_url
 from app.services.url_utils import normalize_root_url
 
 
+logger = logging.getLogger("uvicorn.error")
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     """Prepare storage and SQLite tables when the app starts.
@@ -53,6 +58,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     """
 
     init_db()
+    _log_startup_state()
     yield
 
 
@@ -109,6 +115,18 @@ def create_scan(
     db.commit()
     db.refresh(scan)
 
+    logger.info(
+        "scan_created scan_id=%s version=%s root_url=%s normalized_root_url=%s "
+        "max_pages=%s max_depth=%s time_budget_seconds=%s",
+        scan.id,
+        scan.version_number,
+        scan.root_url,
+        scan.normalized_root_url,
+        scan.crawl_max_pages,
+        scan.crawl_max_depth,
+        scan.crawl_max_duration_seconds,
+    )
+
     background_tasks.add_task(run_scan, scan.id)
     return ScanCreated(
         scan_id=scan.id,
@@ -148,6 +166,13 @@ def get_scan(scan_id: int, db: Session = Depends(get_db)) -> ScanStatus:
 
     scan = db.get(Scan, scan_id)
     if scan is None:
+        logger.warning(
+            "scan_not_found scan_id=%s scan_count=%s storage_dir=%s database_url=%s",
+            scan_id,
+            _scan_count(db),
+            STORAGE_DIR,
+            DATABASE_URL,
+        )
         raise HTTPException(status_code=404, detail="Scan not found")
 
     return ScanStatus(
@@ -238,3 +263,30 @@ def _next_version_number(db: Session, normalized_root_url: str) -> int:
         Scan.normalized_root_url == normalized_root_url
     ).scalar()
     return (current_max or 0) + 1
+
+
+def _log_startup_state() -> None:
+    db = SessionLocal()
+    try:
+        logger.info(
+            "app_startup storage_dir=%s database_url=%s scan_count=%s "
+            "default_max_pages=%s default_max_depth=%s default_time_budget_seconds=%s",
+            STORAGE_DIR,
+            DATABASE_URL,
+            _scan_count(db),
+            CRAWL_MAX_PAGES,
+            CRAWL_MAX_DEPTH,
+            CRAWL_MAX_DURATION_SECONDS,
+        )
+    except Exception:
+        logger.exception(
+            "app_startup_state_failed storage_dir=%s database_url=%s",
+            STORAGE_DIR,
+            DATABASE_URL,
+        )
+    finally:
+        db.close()
+
+
+def _scan_count(db: Session) -> int:
+    return db.query(func.count(Scan.id)).scalar() or 0
