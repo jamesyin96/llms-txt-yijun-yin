@@ -48,6 +48,10 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
+If pyenv reports that `3.13.5` is unavailable on your machine, use any installed
+Python 3.13.x version and create the venv with that interpreter (for example
+`python3.13 -m venv .venv`).
+
 Then open:
 
 ```text
@@ -112,6 +116,7 @@ Run the test suite:
 
 ```bash
 conda activate myenv
+pip install -r requirements.txt
 pytest -q
 ```
 
@@ -176,17 +181,18 @@ Large sites can still take longer than small sites because the crawler follows s
 
 Recent verified state:
 
-- `pytest -q` passes with 112 tests.
-- Real generated `llms.txt` tested with `example.com` through the web app flow.
-- Real crawler/formatter output tested with `https://www.djangoproject.com/`.
-- Bounded real-site ranking check tested with `https://www.djangoproject.com/`.
+- Formatter-focused tests run successfully (`tests/test_formatter.py`).
 - Manual ranking QA notes are tracked in `MANUAL_QA.md`.
 
 ## Remaining Work
 
 - Tune ranking rules from manual tests across richer public websites.
 - Add detailed change views with exact added, removed, and changed URLs.
-- Deploy a free-tier demo and run the hosted smoke checklist below.
+- Run broader hosted smoke tests against more real-world sites on the live demo.
+
+## Live Deployment
+
+- Render public URL: `https://website-llms-txt-generator.onrender.com/`
 
 ## Render Free Tier
 
