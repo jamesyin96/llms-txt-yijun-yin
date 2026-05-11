@@ -8,12 +8,13 @@ formatting can evolve separately.
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from hashlib import sha256
+import logging
 from time import monotonic
 from typing import Protocol
 
 import httpx
 
-from app.config import CRAWL_MAX_CONCURRENCY
+from app.config import CRAWL_MAX_CONCURRENCY, CRAWL_MAX_SITEMAPS
 from app.services.fetcher import FetchConfig, FetchError, FetchResult, fetch_url
 from app.services.html_parser import HtmlParseResult, ImageCandidate, parse_html_document
 from app.services.resource_classifier import (
@@ -28,6 +29,9 @@ from app.services.sitemap import discover_sitemap_urls
 from app.services.url_utils import is_same_hostname, normalize_root_url
 
 
+logger = logging.getLogger("uvicorn.error")
+
+
 @dataclass(frozen=True)
 class CrawlConfig:
     """Crawl limits for V1."""
@@ -36,6 +40,7 @@ class CrawlConfig:
     max_depth: int = 2
     max_duration_seconds: float = 30.0
     max_concurrency: int = CRAWL_MAX_CONCURRENCY
+    max_sitemaps: int = CRAWL_MAX_SITEMAPS
 
 
 @dataclass(frozen=True)
@@ -151,18 +156,48 @@ def crawl_site(
             client=crawl_client,
             fetcher=fetcher,
         )
+        logger.info(
+            "crawler_sitemap_start root_url=%s max_sitemaps=%s max_page_urls=%s",
+            normalized_root_url,
+            config.max_sitemaps,
+            config.max_pages,
+        )
         sitemap_result = discover_sitemap_urls(
             normalized_root_url,
             robots_rules,
             config=fetch_config,
             client=crawl_client,
             fetcher=fetcher,
+            max_sitemaps=config.max_sitemaps,
+            max_page_urls=config.max_pages,
+        )
+        logger.info(
+            "crawler_sitemap_end root_url=%s duration_seconds=%.3f "
+            "sitemap_urls_fetched=%s page_urls_discovered=%s sitemap_limit_reached=%s "
+            "page_url_limit_reached=%s",
+            normalized_root_url,
+            sitemap_result.duration_seconds,
+            len(sitemap_result.sitemap_urls_fetched),
+            len(sitemap_result.page_urls),
+            sitemap_result.sitemap_limit_reached,
+            sitemap_result.page_url_limit_reached,
         )
 
         _enqueue(queue, queued_urls, _QueueItem(normalized_root_url, depth=0, source_url=None))
         for sitemap_url in sitemap_result.page_urls:
             _enqueue(queue, queued_urls, _QueueItem(sitemap_url, depth=0, source_url="sitemap"))
 
+        page_crawl_started_at = monotonic()
+        logger.info(
+            "crawler_pages_start root_url=%s queued_urls=%s max_pages=%s max_depth=%s "
+            "max_concurrency=%s time_budget_seconds=%s",
+            normalized_root_url,
+            len(queue),
+            config.max_pages,
+            config.max_depth,
+            worker_count,
+            config.max_duration_seconds,
+        )
         with ThreadPoolExecutor(max_workers=worker_count) as executor:
             while queue and len(resources) < config.max_pages:
                 if _crawl_deadline_exceeded(started_at, config.max_duration_seconds):
@@ -206,6 +241,18 @@ def crawl_site(
                         root_url=normalized_root_url,
                         config=config,
                     )
+        logger.info(
+            "crawler_pages_end root_url=%s duration_seconds=%.3f total_duration_seconds=%.3f "
+            "resources=%s skipped=%s errors=%s seen_urls=%s queued_urls_remaining=%s",
+            normalized_root_url,
+            monotonic() - page_crawl_started_at,
+            monotonic() - started_at,
+            len(resources),
+            len(skipped),
+            len(errors),
+            len(seen_urls),
+            len(queue),
+        )
     finally:
         if owns_client:
             crawl_client.close()

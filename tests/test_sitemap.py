@@ -121,6 +121,97 @@ def test_discovery_fetches_nested_sitemap_index() -> None:
     )
 
 
+def test_discovery_limits_sitemaps_fetched() -> None:
+    robots = parse_robots_txt("", root_url=ROOT_URL)
+    calls: list[str] = []
+
+    def fake_fetcher(
+        url: str,
+        *,
+        config: FetchConfig | None = None,
+        client: httpx.Client | None = None,
+    ) -> FetchResult:
+        calls.append(url)
+        if url.endswith("sitemap.xml"):
+            body = """
+            <sitemapindex>
+              <sitemap><loc>/one.xml</loc></sitemap>
+              <sitemap><loc>/two.xml</loc></sitemap>
+              <sitemap><loc>/three.xml</loc></sitemap>
+            </sitemapindex>
+            """
+        else:
+            body = f"""
+            <urlset>
+              <url><loc>{ROOT_URL}{url.rsplit('/', 1)[-1]}-a</loc></url>
+              <url><loc>{ROOT_URL}{url.rsplit('/', 1)[-1]}-b</loc></url>
+            </urlset>
+            """
+        return _fetch_result(url, body)
+
+    result = discover_sitemap_urls(
+        ROOT_URL,
+        robots,
+        fetcher=fake_fetcher,
+        max_sitemaps=2,
+    )
+
+    assert calls == [
+        "https://example.com/sitemap.xml",
+        "https://example.com/one.xml",
+    ]
+    assert result.sitemap_limit_reached
+    assert not result.page_url_limit_reached
+    assert result.page_urls == (
+        "https://example.com/one.xml-a",
+        "https://example.com/one.xml-b",
+    )
+
+
+def test_discovery_limits_page_urls() -> None:
+    robots = parse_robots_txt("", root_url=ROOT_URL)
+    calls: list[str] = []
+
+    def fake_fetcher(
+        url: str,
+        *,
+        config: FetchConfig | None = None,
+        client: httpx.Client | None = None,
+    ) -> FetchResult:
+        calls.append(url)
+        if url.endswith("sitemap.xml"):
+            body = """
+            <sitemapindex>
+              <sitemap><loc>/one.xml</loc></sitemap>
+              <sitemap><loc>/two.xml</loc></sitemap>
+            </sitemapindex>
+            """
+        else:
+            body = f"""
+            <urlset>
+              <url><loc>{ROOT_URL}{url.rsplit('/', 1)[-1]}-a</loc></url>
+              <url><loc>{ROOT_URL}{url.rsplit('/', 1)[-1]}-b</loc></url>
+            </urlset>
+            """
+        return _fetch_result(url, body)
+
+    result = discover_sitemap_urls(
+        ROOT_URL,
+        robots,
+        fetcher=fake_fetcher,
+        max_sitemaps=10,
+        max_page_urls=1,
+    )
+
+    assert calls == [
+        "https://example.com/sitemap.xml",
+        "https://example.com/one.xml",
+    ]
+    assert not result.sitemap_limit_reached
+    assert result.page_url_limit_reached
+    assert result.page_urls == ("https://example.com/one.xml-a",)
+
+
 def test_discovery_filters_cross_host_and_robots_disallowed_urls() -> None:
     robots = parse_robots_txt(
         """
@@ -199,4 +290,3 @@ def _fetch_result(url: str, body: str, *, status_code: int = 200) -> FetchResult
         content=body.encode("utf-8"),
         redirect_count=0,
     )
-

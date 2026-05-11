@@ -41,3 +41,7 @@ CRAWL_MAX_PAGES = min(int_setting("CRAWL_MAX_PAGES", 100), 500)
 CRAWL_MAX_DEPTH = min(int_setting("CRAWL_MAX_DEPTH", 2), 5)
 CRAWL_MAX_DURATION_SECONDS = min(float_setting("CRAWL_MAX_DURATION_SECONDS", 30.0), 60.0)
 CRAWL_MAX_CONCURRENCY = min(int_setting("CRAWL_MAX_CONCURRENCY", 10), 20)
+# Large sitemap indexes can reference many child sitemap files. Keep discovery
+# bounded so scans reach page crawling promptly instead of spending the whole
+# run enumerating sitemap candidates that exceed CRAWL_MAX_PAGES anyway.
+CRAWL_MAX_SITEMAPS = min(int_setting("CRAWL_MAX_SITEMAPS", 10), 50)

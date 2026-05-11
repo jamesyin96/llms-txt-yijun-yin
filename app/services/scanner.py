@@ -11,7 +11,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from app.config import CRAWL_MAX_CONCURRENCY, STORAGE_DIR
+from app.config import CRAWL_MAX_CONCURRENCY, CRAWL_MAX_SITEMAPS, STORAGE_DIR
 from app.db import SessionLocal
 from app.models import Page, Scan
 from app.services.change_detector import summarize_changes
@@ -67,14 +67,21 @@ def _run_scan(scan_id: int, db: Session) -> None:
                 max_depth=scan.crawl_max_depth,
                 max_duration_seconds=scan.crawl_max_duration_seconds,
                 max_concurrency=CRAWL_MAX_CONCURRENCY,
+                max_sitemaps=CRAWL_MAX_SITEMAPS,
             ),
         )
-        ranked_resources = rank_resources(crawl_result.resources, scan.normalized_root_url)
+        ranked_resources = _ranked_resources_with_fallback(
+            crawl_result.resources,
+            scan.normalized_root_url,
+        )
         pages = [_page_from_ranked_resource(scan.id, ranked) for ranked in ranked_resources]
         db.add_all(pages)
 
         scan.status = "generating"
-        scan.pages_found = len(crawl_result.resources) + len(crawl_result.skipped)
+        scan.pages_found = max(
+            len(crawl_result.resources) + len(crawl_result.skipped),
+            len(ranked_resources),
+        )
         scan.pages_included = len(ranked_resources)
         db.commit()
         logger.info(
@@ -197,6 +204,39 @@ def _page_from_ranked_resource(scan_id: int, ranked: RankedResource) -> Page:
         last_crawled_at=datetime.utcnow(),
         included=ranked.include,
     )
+
+
+def _ranked_resources_with_fallback(
+    resources: tuple[CrawlResource, ...],
+    root_url: str,
+) -> list[RankedResource]:
+    """Return ranked crawl resources, with a valid llms.txt fallback.
+
+    Some large or defensive sites can yield no rankable pages after redirects,
+    robots rules, fetch errors, content-type filtering, or low-value URL
+    ranking. A root link is preferable to failing validation because llms.txt
+    requires at least one H2 section with one markdown link.
+    """
+
+    ranked_resources = rank_resources(resources, root_url)
+    if ranked_resources:
+        return ranked_resources
+
+    fallback_resource = CrawlResource(
+        url=root_url,
+        resource_type=ResourceType.HTML,
+        title=_site_name_from_url(root_url),
+        description=f"Homepage for {root_url}.",
+    )
+    return [
+        RankedResource(
+            resource=fallback_resource,
+            score=0.0,
+            section="Key Pages",
+            include=True,
+            reason="fallback homepage",
+        )
+    ]
 
 
 def _llm_resources_from_ranked(ranked_resources: list[RankedResource]) -> list[LlmResource]:

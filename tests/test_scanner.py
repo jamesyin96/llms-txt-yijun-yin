@@ -127,6 +127,7 @@ def test_run_scan_uses_scan_specific_crawl_settings(tmp_path, monkeypatch):
     assert observed_config.max_depth == 1
     assert observed_config.max_duration_seconds == 9.5
     assert observed_config.max_concurrency == scanner.CRAWL_MAX_CONCURRENCY
+    assert observed_config.max_sitemaps == scanner.CRAWL_MAX_SITEMAPS
 
 
 def test_run_scan_groups_common_page_types_into_sections(tmp_path, monkeypatch):
@@ -171,6 +172,49 @@ def test_run_scan_groups_common_page_types_into_sections(tmp_path, monkeypatch):
     assert "## Articles" in generated
     assert "## Company" in generated
     assert "## Support" in generated
+
+
+def test_run_scan_generates_valid_fallback_when_no_resources_rank(tmp_path, monkeypatch):
+    import app.config as config
+    import app.services.scanner as scanner
+
+    monkeypatch.setattr(config, "STORAGE_DIR", tmp_path)
+    monkeypatch.setattr(scanner, "STORAGE_DIR", tmp_path)
+    monkeypatch.setattr(
+        scanner,
+        "crawl_site",
+        lambda root_url, crawl_config: CrawlResult(
+            root_url=root_url,
+            resources=(),
+        ),
+    )
+
+    db = _fresh_db_session(tmp_path)
+    scan = Scan(
+        root_url="apple.com",
+        normalized_root_url="https://apple.com/",
+        version_number=1,
+        status="queued",
+    )
+    db.add(scan)
+    db.commit()
+    db.refresh(scan)
+
+    _run_scan(scan.id, db)
+
+    db.refresh(scan)
+    pages = db.query(Page).order_by(Page.id).all()
+    generated = Path(tmp_path / scan.output_path).read_text(encoding="utf-8")
+
+    assert scan.status == "complete"
+    assert scan.pages_found == 1
+    assert scan.pages_included == 1
+    assert len(pages) == 1
+    assert pages[0].url == "https://apple.com/"
+    assert pages[0].section == "Key Pages"
+    assert "## Key Pages" in generated
+    assert "- [apple.com](https://apple.com/): Homepage for https://apple.com/." in generated
+    assert validate_llms_txt(generated).valid
 
 
 def test_run_scan_stores_change_summary_against_previous_completed_scan(tmp_path, monkeypatch):

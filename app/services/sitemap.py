@@ -7,6 +7,7 @@ robots allow/disallow rules to discovered page URLs.
 """
 
 from dataclasses import dataclass, field
+from time import monotonic
 from typing import Protocol
 from xml.etree import ElementTree
 
@@ -19,6 +20,7 @@ from app.services.url_utils import canonicalize_discovered_url, is_same_hostname
 
 DEFAULT_SITEMAP_PATH = "/sitemap.xml"
 MAX_SITEMAP_DEPTH = 2
+MAX_SITEMAPS_FETCHED = 10
 
 
 @dataclass(frozen=True)
@@ -35,6 +37,9 @@ class SitemapDiscoveryResult:
 
     page_urls: tuple[str, ...] = field(default_factory=tuple)
     sitemap_urls_fetched: tuple[str, ...] = field(default_factory=tuple)
+    sitemap_limit_reached: bool = False
+    page_url_limit_reached: bool = False
+    duration_seconds: float = 0.0
 
 
 class FetchSitemapFn(Protocol):
@@ -58,9 +63,12 @@ def discover_sitemap_urls(
     client: httpx.Client | None = None,
     fetcher: FetchSitemapFn = fetch_url,
     max_depth: int = MAX_SITEMAP_DEPTH,
+    max_sitemaps: int = MAX_SITEMAPS_FETCHED,
+    max_page_urls: int | None = None,
 ) -> SitemapDiscoveryResult:
     """Discover crawlable same-host page URLs from robots and fallback sitemaps."""
 
+    started_at = monotonic()
     seed_sitemaps = _sitemap_seeds(root_url, robots_rules)
     queue: list[tuple[str, int]] = [(sitemap_url, 0) for sitemap_url in seed_sitemaps]
     seen_sitemaps: set[str] = set()
@@ -68,7 +76,10 @@ def discover_sitemap_urls(
     page_urls: list[str] = []
     seen_pages: set[str] = set()
 
-    while queue:
+    # Treat sitemaps as discovery hints, not a full-site inventory. Big sites
+    # can expose huge sitemap indexes, while the crawler only needs enough page
+    # candidates to fill the scan's max_pages budget.
+    while queue and len(fetched_sitemaps) < max_sitemaps:
         sitemap_url, depth = queue.pop(0)
         if sitemap_url in seen_sitemaps or depth > max_depth:
             continue
@@ -96,10 +107,18 @@ def discover_sitemap_urls(
             ):
                 seen_pages.add(page_url)
                 page_urls.append(page_url)
+                if max_page_urls is not None and len(page_urls) >= max_page_urls:
+                    break
+
+        if max_page_urls is not None and len(page_urls) >= max_page_urls:
+            break
 
     return SitemapDiscoveryResult(
         page_urls=tuple(page_urls),
         sitemap_urls_fetched=tuple(fetched_sitemaps),
+        sitemap_limit_reached=bool(queue) and len(fetched_sitemaps) >= max_sitemaps,
+        page_url_limit_reached=max_page_urls is not None and len(page_urls) >= max_page_urls,
+        duration_seconds=round(monotonic() - started_at, 3),
     )
 
 

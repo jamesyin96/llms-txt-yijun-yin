@@ -1,3 +1,4 @@
+import logging
 from threading import Event, Lock
 
 import httpx
@@ -96,6 +97,37 @@ def test_crawler_respects_max_pages_limit() -> None:
     ]
 
 
+def test_crawler_logs_sitemap_and_page_crawl_metrics(caplog) -> None:
+    caplog.set_level(logging.INFO, logger="uvicorn.error")
+    fetcher = _mapping_fetcher(
+        {
+            "https://example.com/robots.txt": (404, ""),
+            "https://example.com/sitemap.xml": (404, ""),
+            "https://example.com/": (200, _html("Home Page")),
+        }
+    )
+
+    crawl_site(ROOT_URL, crawl_config=CrawlConfig(max_pages=5, max_sitemaps=3), fetcher=fetcher)
+
+    messages = [record.getMessage() for record in caplog.records]
+    assert any(
+        "crawler_sitemap_start root_url=https://example.com/ max_sitemaps=3 max_page_urls=5"
+        in message
+        for message in messages
+    )
+    assert any(
+        "crawler_sitemap_end root_url=https://example.com/" in message
+        and "sitemap_urls_fetched=0" in message
+        for message in messages
+    )
+    assert any("crawler_pages_start root_url=https://example.com/" in message for message in messages)
+    assert any(
+        "crawler_pages_end root_url=https://example.com/" in message
+        and "resources=1" in message
+        for message in messages
+    )
+
+
 def test_crawler_fetches_subpages_concurrently() -> None:
     active_fetches = 0
     peak_fetches = 0
@@ -157,7 +189,7 @@ def test_crawler_respects_duration_limit(monkeypatch) -> None:
             "https://example.com/sitemap.xml": (404, ""),
         }
     )
-    times = iter([0.0, 1.0])
+    times = iter([0.0, 0.1, 1.0, 1.1, 1.2])
     monkeypatch.setattr(crawler, "monotonic", lambda: next(times))
 
     result = crawler.crawl_site(

@@ -105,10 +105,11 @@ export CRAWL_MAX_PAGES=100
 export CRAWL_MAX_DEPTH=2
 export CRAWL_MAX_DURATION_SECONDS=30
 export CRAWL_MAX_CONCURRENCY=10
+export CRAWL_MAX_SITEMAPS=10
 uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-The first three environment variables set the defaults shown in Advanced Settings. The user can still override them per scan in the browser. `CRAWL_MAX_CONCURRENCY` controls the bounded thread pool used to fetch subpages during a scan.
+The first three environment variables set the defaults shown in Advanced Settings. The user can still override them per scan in the browser. `CRAWL_MAX_CONCURRENCY` controls the bounded thread pool used to fetch subpages during a scan. `CRAWL_MAX_SITEMAPS` limits how many sitemap files are fetched before page crawling begins.
 
 Advanced Settings bounds:
 
@@ -116,6 +117,7 @@ Advanced Settings bounds:
 - Max depth: 0 to 5.
 - Time budget: 1 to 60 seconds.
 - Crawl concurrency: 1 to 20 workers.
+- Sitemap files fetched: 1 to 50 files.
 
 ## Testing
 
@@ -222,6 +224,7 @@ Recommended Render settings:
   - `CRAWL_MAX_DEPTH=2`
   - `CRAWL_MAX_DURATION_SECONDS=30`
   - `CRAWL_MAX_CONCURRENCY=10`
+  - `CRAWL_MAX_SITEMAPS=10`
   - `STORAGE_DIR=/var/data` (recommended when using a Render disk mount)
 
 Render will provide the `$PORT` environment variable. The app creates `storage/` and SQLite tables at startup.
