@@ -126,6 +126,7 @@ def test_run_scan_uses_scan_specific_crawl_settings(tmp_path, monkeypatch):
     assert observed_config.max_pages == 7
     assert observed_config.max_depth == 1
     assert observed_config.max_duration_seconds == 9.5
+    assert observed_config.max_concurrency == scanner.CRAWL_MAX_CONCURRENCY
 
 
 def test_run_scan_groups_common_page_types_into_sections(tmp_path, monkeypatch):

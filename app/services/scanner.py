@@ -11,7 +11,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from app.config import STORAGE_DIR
+from app.config import CRAWL_MAX_CONCURRENCY, STORAGE_DIR
 from app.db import SessionLocal
 from app.models import Page, Scan
 from app.services.change_detector import summarize_changes
@@ -66,6 +66,7 @@ def _run_scan(scan_id: int, db: Session) -> None:
                 max_pages=scan.crawl_max_pages,
                 max_depth=scan.crawl_max_depth,
                 max_duration_seconds=scan.crawl_max_duration_seconds,
+                max_concurrency=CRAWL_MAX_CONCURRENCY,
             ),
         )
         ranked_resources = rank_resources(crawl_result.resources, scan.normalized_root_url)

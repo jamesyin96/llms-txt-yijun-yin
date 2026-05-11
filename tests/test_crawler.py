@@ -1,3 +1,5 @@
+from threading import Event, Lock
+
 import httpx
 
 from app.services.crawler import CrawlConfig, crawl_site
@@ -91,6 +93,58 @@ def test_crawler_respects_max_pages_limit() -> None:
     assert [resource.url for resource in result.resources] == [
         "https://example.com/",
         "https://example.com/one",
+    ]
+
+
+def test_crawler_fetches_subpages_concurrently() -> None:
+    active_fetches = 0
+    peak_fetches = 0
+    subpage_fetches_started = 0
+    lock = Lock()
+    both_subpages_started = Event()
+
+    def fetcher(
+        url: str,
+        *,
+        config: FetchConfig | None = None,
+        client: httpx.Client | None = None,
+    ) -> FetchResult:
+        nonlocal active_fetches, peak_fetches, subpage_fetches_started
+        if url.endswith("robots.txt") or url.endswith("sitemap.xml"):
+            return _fetch_result(url, "", status_code=404)
+
+        if url in {"https://example.com/one", "https://example.com/two"}:
+            with lock:
+                active_fetches += 1
+                subpage_fetches_started += 1
+                peak_fetches = max(peak_fetches, active_fetches)
+                if subpage_fetches_started == 2:
+                    both_subpages_started.set()
+
+            both_subpages_started.wait(timeout=1.0)
+
+            with lock:
+                active_fetches -= 1
+
+        if url == "https://example.com/":
+            return _fetch_result(url, _html("Home", links=["/one", "/two"]))
+        if url.endswith("/one"):
+            return _fetch_result(url, _html("One"))
+        if url.endswith("/two"):
+            return _fetch_result(url, _html("Two"))
+        raise AssertionError(f"Unexpected URL: {url}")
+
+    result = crawl_site(
+        ROOT_URL,
+        crawl_config=CrawlConfig(max_depth=1, max_concurrency=2),
+        fetcher=fetcher,
+    )
+
+    assert peak_fetches == 2
+    assert [resource.url for resource in result.resources] == [
+        "https://example.com/",
+        "https://example.com/one",
+        "https://example.com/two",
     ]
 
 

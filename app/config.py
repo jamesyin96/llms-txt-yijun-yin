@@ -40,3 +40,4 @@ def float_setting(name: str, default: float) -> float:
 CRAWL_MAX_PAGES = min(int_setting("CRAWL_MAX_PAGES", 100), 500)
 CRAWL_MAX_DEPTH = min(int_setting("CRAWL_MAX_DEPTH", 2), 5)
 CRAWL_MAX_DURATION_SECONDS = min(float_setting("CRAWL_MAX_DURATION_SECONDS", 30.0), 60.0)
+CRAWL_MAX_CONCURRENCY = min(int_setting("CRAWL_MAX_CONCURRENCY", 10), 20)
