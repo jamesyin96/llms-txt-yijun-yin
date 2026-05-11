@@ -52,6 +52,11 @@ If pyenv reports that `3.13.5` is unavailable on your machine, use any installed
 Python 3.13.x version and create the venv with that interpreter (for example
 `python3.13 -m venv .venv`).
 
+Storage path behavior:
+
+- Local default (no env var set): `./storage` in the repo.
+- Hosted persistent mode: set `STORAGE_DIR=/var/data` (or your mounted disk path).
+
 Then open:
 
 ```text
@@ -196,7 +201,9 @@ Recent verified state:
 
 ## Render Free Tier
 
-The first hosted demo can use Render's free web service tier. SQLite data and generated files are stored on the regular filesystem, which is ephemeral on Render. Download links are best-effort and may disappear after restart, redeploy, or cold-start replacement.
+The hosted demo runs on Render. If you attach a persistent disk mounted at
+`/var/data`, configure `STORAGE_DIR=/var/data` so SQLite data and generated
+files persist across restarts/redeploys.
 
 Recommended Render settings:
 
@@ -205,22 +212,22 @@ Recommended Render settings:
 - Build command: `pip install -r requirements.txt`.
 - Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`.
 - Instance type: Free.
-- Persistent disk: none for the demo.
-- Database: local SQLite file at `storage/app.sqlite3`.
-- Generated files: local files under `storage/`.
+- Persistent disk: mount at `/var/data` for durable demo data.
+- Database: `STORAGE_DIR/app.sqlite3` (for example `/var/data/app.sqlite3`).
+- Generated files: local files under `STORAGE_DIR/`.
 - Optional environment variables:
   - `CRAWL_MAX_PAGES=100`
   - `CRAWL_MAX_DEPTH=2`
   - `CRAWL_MAX_DURATION_SECONDS=30`
+  - `STORAGE_DIR=/var/data` (recommended when using a Render disk mount)
 
 Render will provide the `$PORT` environment variable. The app creates `storage/` and SQLite tables at startup.
 
 Operational caveats:
 
-- Data is not durable on the free tier.
-- If the service restarts or redeploys, previous scan history and download files may disappear.
+- Data durability depends on whether `STORAGE_DIR` points to persistent disk storage.
+- If `STORAGE_DIR` is left at the default `storage/` path, previous scan history and download files may disappear after restart/redeploy.
 - For a demo, open the app shortly before presenting and generate a fresh `llms.txt`.
-- If reliable persistence becomes important, upgrade to a paid Render service with a persistent disk or move data to Postgres/object storage.
 
 Render start command:
 

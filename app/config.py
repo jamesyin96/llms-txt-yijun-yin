@@ -10,7 +10,7 @@ import os
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-STORAGE_DIR = BASE_DIR / "storage"
+STORAGE_DIR = Path(os.getenv("STORAGE_DIR", str(BASE_DIR / "storage"))).expanduser()
 DATABASE_URL = f"sqlite:///{STORAGE_DIR / 'app.sqlite3'}"
 
 APP_NAME = "LLMs.txt Generator"

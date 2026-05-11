@@ -1,9 +1,8 @@
 """Database setup for the local SQLite-backed application.
 
-Render free-tier deployments use the same SQLite file under `storage/`, with
-the known caveat that the filesystem is ephemeral. For V1 this is acceptable
-because generated downloads are only expected to survive during an active demo
-session.
+By default, SQLite and generated outputs live under `storage/`. For hosted
+deployments, set `STORAGE_DIR` (for example `/var/data`) to place both the
+database and generated files on a persistent volume.
 """
 
 from collections.abc import Generator
