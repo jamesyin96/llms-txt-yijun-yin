@@ -12,6 +12,7 @@ V1 exposes a deliberately small surface area:
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
+import asyncio
 import logging
 
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
@@ -22,6 +23,8 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.config import (
+    AUTO_REFRESH_LOOKBACK_HOURS,
+    AUTO_REFRESH_POLL_INTERVAL_SECONDS,
     APP_NAME,
     BASE_DIR,
     CRAWL_MAX_DEPTH,
@@ -42,6 +45,7 @@ from app.schemas import (
 )
 from app.services.change_detector import parse_change_summary
 from app.services.scanner import run_scan
+from app.services.refresh_scheduler import queue_due_auto_refresh_scans
 from app.services.security import UnsafeUrlError, assert_safe_url
 from app.services.url_utils import normalize_root_url
 
@@ -61,7 +65,36 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
     init_db()
     _log_startup_state()
-    yield
+    stop_event = asyncio.Event()
+    poller = asyncio.create_task(_auto_refresh_poller(stop_event))
+    try:
+        yield
+    finally:
+        stop_event.set()
+        await poller
+
+
+async def _auto_refresh_poller(stop_event: asyncio.Event) -> None:
+    while not stop_event.is_set():
+        logger.info("auto_refresh_poller_tick")
+        _run_auto_refresh_cycle()
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=AUTO_REFRESH_POLL_INTERVAL_SECONDS)
+        except TimeoutError:
+            continue
+
+
+def _run_auto_refresh_cycle() -> None:
+    db = SessionLocal()
+    try:
+        queued_scan_ids = queue_due_auto_refresh_scans(db)
+        logger.info("auto_refresh_poller_queued queued_count=%s", len(queued_scan_ids))
+        for scan_id in queued_scan_ids:
+            logger.info("auto_refresh_scan_start scan_id=%s", scan_id)
+            run_scan(scan_id)
+            logger.info("auto_refresh_scan_complete scan_id=%s", scan_id)
+    finally:
+        db.close()
 
 
 app = FastAPI(title=APP_NAME, lifespan=lifespan)
@@ -104,7 +137,7 @@ def create_scan(
     except (ValueError, UnsafeUrlError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    existing = _latest_completed_scan_within(db, normalized_url, hours=REFRESH_LOOKBACK_HOURS)
+    existing = _latest_completed_scan_within(db, normalized_url, hours=AUTO_REFRESH_LOOKBACK_HOURS)
     if existing is not None:
         existing.auto_refresh_daily = payload.auto_refresh_daily or existing.auto_refresh_daily
         db.commit()

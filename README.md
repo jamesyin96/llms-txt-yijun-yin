@@ -92,10 +92,12 @@ export CRAWL_MAX_DEPTH=2
 export CRAWL_MAX_DURATION_SECONDS=30
 export CRAWL_MAX_CONCURRENCY=10
 export CRAWL_MAX_SITEMAPS=10
+export AUTO_REFRESH_LOOKBACK_HOURS=12
+export AUTO_REFRESH_POLL_INTERVAL_SECONDS=43200
 uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-The first three environment variables set the defaults shown in Advanced Settings. The user can still override them per scan in the browser. `CRAWL_MAX_CONCURRENCY` controls the bounded thread pool used to fetch subpages during a scan. `CRAWL_MAX_SITEMAPS` limits how many sitemap files are fetched before page crawling begins.
+The first three environment variables set the defaults shown in Advanced Settings. The user can still override them per scan in the browser. `CRAWL_MAX_CONCURRENCY` controls the bounded thread pool used to fetch subpages during a scan. `CRAWL_MAX_SITEMAPS` limits how many sitemap files are fetched before page crawling begins. `AUTO_REFRESH_LOOKBACK_HOURS` controls when a previous completed scan is considered stale. `AUTO_REFRESH_POLL_INTERVAL_SECONDS` controls how frequently the background auto-refresh poller runs.
 
 Advanced Settings bounds:
 
@@ -197,11 +199,18 @@ Current status against the assignment:
 
 Items that are still partial or not fully implemented yet:
 
-- Fully automated ongoing monitoring that periodically re-scans websites and refreshes outputs without manual user action (cron/worker/scheduler): **not implemented yet**.
+- Fully automated ongoing monitoring that periodically re-scans websites and refreshes outputs without manual user action (cron/worker/scheduler): **partially implemented (in-process poller)**.
 - Broad conformance verification against the latest `llmstxt.org` spec across many real websites (including strict edge-case handling): **partially implemented, needs broader validation**.
 - Rich change reporting UI/API with exact URL-level diffs and content-level deltas: **not implemented yet (only compact counts in V1)**.
 - Large-variety production hardening (deeper benchmark corpus, stronger anti-bot handling, richer retries/backoff/observability): **partially implemented**.
 - Deliverable artifacts for submissions (project screenshots/demo video and collaborator checklist guidance): **not documented as a dedicated checklist section yet**.
+
+Auto-refresh current limitations:
+
+- Scheduler runs in-process with the web app lifespan. If the web service is down, refresh jobs do not run.
+- No distributed leader election/locking is implemented yet; multi-instance deployments may trigger duplicate refresh work.
+- Refresh cadence is global via env vars, not per-site custom intervals.
+- No dedicated admin UI for last refresh run status, scheduler health, or retry controls.
 
 ## Live Deployment
 
