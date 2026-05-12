@@ -40,3 +40,11 @@ def test_auto_refresh_settings_from_env(monkeypatch) -> None:
 
     assert reloaded.AUTO_REFRESH_LOOKBACK_HOURS == 24
     assert reloaded.AUTO_REFRESH_POLL_INTERVAL_SECONDS == 7200
+
+
+def test_auto_refresh_poll_interval_defaults_to_one_hour(monkeypatch) -> None:
+    monkeypatch.delenv("AUTO_REFRESH_POLL_INTERVAL_SECONDS", raising=False)
+
+    reloaded = importlib.reload(config)
+
+    assert reloaded.AUTO_REFRESH_POLL_INTERVAL_SECONDS == 3600

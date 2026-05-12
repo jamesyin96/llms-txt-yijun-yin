@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from uuid import uuid4
 
 from app.db import SessionLocal, init_db
 from app.models import Scan
@@ -11,9 +12,10 @@ init_db()
 def test_queue_due_auto_refresh_scans_queues_for_stale_refresh_enabled_site() -> None:
     db = SessionLocal()
     try:
+        url = f"https://refresh-stale-{uuid4().hex}.example.com/"
         base = Scan(
-            root_url="https://refresh-stale.example.com/",
-            normalized_root_url="https://refresh-stale.example.com/",
+            root_url=url,
+            normalized_root_url=url,
             version_number=1,
             status="complete",
             auto_refresh_daily=True,
@@ -37,9 +39,10 @@ def test_queue_due_auto_refresh_scans_queues_for_stale_refresh_enabled_site() ->
 def test_queue_due_auto_refresh_scans_skips_recent_scan() -> None:
     db = SessionLocal()
     try:
+        url = f"https://refresh-recent-{uuid4().hex}.example.com/"
         recent = Scan(
-            root_url="https://refresh-recent.example.com/",
-            normalized_root_url="https://refresh-recent.example.com/",
+            root_url=url,
+            normalized_root_url=url,
             version_number=1,
             status="complete",
             auto_refresh_daily=True,
@@ -58,9 +61,10 @@ def test_queue_due_auto_refresh_scans_skips_recent_scan() -> None:
 def test_queue_due_auto_refresh_scans_skips_when_auto_refresh_disabled() -> None:
     db = SessionLocal()
     try:
+        url = f"https://refresh-disabled-{uuid4().hex}.example.com/"
         disabled = Scan(
-            root_url="https://refresh-disabled.example.com/",
-            normalized_root_url="https://refresh-disabled.example.com/",
+            root_url=url,
+            normalized_root_url=url,
             version_number=1,
             status="complete",
             auto_refresh_daily=False,

@@ -93,11 +93,11 @@ export CRAWL_MAX_DURATION_SECONDS=30
 export CRAWL_MAX_CONCURRENCY=10
 export CRAWL_MAX_SITEMAPS=10
 export AUTO_REFRESH_LOOKBACK_HOURS=12
-export AUTO_REFRESH_POLL_INTERVAL_SECONDS=43200
+export AUTO_REFRESH_POLL_INTERVAL_SECONDS=3600
 uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-The first three environment variables set the defaults shown in Advanced Settings. The user can still override them per scan in the browser. `CRAWL_MAX_CONCURRENCY` controls the bounded thread pool used to fetch subpages during a scan. `CRAWL_MAX_SITEMAPS` limits how many sitemap files are fetched before page crawling begins. `AUTO_REFRESH_LOOKBACK_HOURS` controls when a previous completed scan is considered stale. `AUTO_REFRESH_POLL_INTERVAL_SECONDS` controls how frequently the background auto-refresh poller runs.
+The first three environment variables set the defaults shown in Advanced Settings. The user can still override them per scan in the browser. `CRAWL_MAX_CONCURRENCY` controls the bounded thread pool used to fetch subpages during a scan. `CRAWL_MAX_SITEMAPS` limits how many sitemap files are fetched before page crawling begins. `AUTO_REFRESH_LOOKBACK_HOURS` controls when a previous completed scan is considered stale. `AUTO_REFRESH_POLL_INTERVAL_SECONDS` controls how frequently the background auto-refresh poller runs; by default it checks once per hour.
 
 Advanced Settings bounds:
 
