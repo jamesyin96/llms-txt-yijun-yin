@@ -85,6 +85,11 @@ def _run_lightweight_migrations() -> None:
         "crawl_max_duration_seconds",
         f"FLOAT NOT NULL DEFAULT {CRAWL_MAX_DURATION_SECONDS}",
     )
+    _add_column_if_missing(
+        scan_columns,
+        "auto_refresh_daily",
+        "BOOLEAN NOT NULL DEFAULT 0",
+    )
     _backfill_scan_versions()
 
 

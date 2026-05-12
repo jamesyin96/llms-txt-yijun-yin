@@ -3,6 +3,7 @@ const input = document.querySelector("[data-url-input]");
 const crawlMaxPagesInput = document.querySelector("[data-crawl-max-pages]");
 const crawlMaxDepthInput = document.querySelector("[data-crawl-max-depth]");
 const crawlMaxDurationInput = document.querySelector("[data-crawl-max-duration]");
+const autoRefreshDailyInput = document.querySelector("[data-auto-refresh-daily]");
 const statusEl = document.querySelector("[data-status]");
 const resultEl = document.querySelector("[data-result]");
 
@@ -24,6 +25,11 @@ form.addEventListener("submit", async (event) => {
     }
 
     const data = await response.json();
+    if (data.reused_existing) {
+      setStatus(`Using recent version ${data.version_number} (updated within 12 hours).`);
+      pollScan(data.scan_id);
+      return;
+    }
     pollScan(data.scan_id);
   } catch (error) {
     setStatus(error.message, true);
@@ -36,6 +42,7 @@ function scanPayload() {
     crawl_max_pages: Number(crawlMaxPagesInput.value),
     crawl_max_depth: Number(crawlMaxDepthInput.value),
     crawl_max_duration_seconds: Number(crawlMaxDurationInput.value),
+    auto_refresh_daily: autoRefreshDailyInput.checked,
   };
 }
 

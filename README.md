@@ -63,20 +63,6 @@ Then open:
 http://127.0.0.1:8000
 ```
 
-## Render Deploy
-
-This repo includes `.python-version` to pin Render to Python 3.13. The dependency set uses packages with compiled wheels, including `pydantic-core`, so avoid deploying on a newer Python runtime until the pinned dependencies publish compatible wheels.
-
-Recommended Render settings:
-
-```bash
-pip install -r requirements.txt
-```
-
-```bash
-uvicorn app.main:app --host 0.0.0.0 --port $PORT
-```
-
 ## Run And Stop With Conda
 
 Start the local server:
@@ -106,10 +92,12 @@ export CRAWL_MAX_DEPTH=2
 export CRAWL_MAX_DURATION_SECONDS=30
 export CRAWL_MAX_CONCURRENCY=10
 export CRAWL_MAX_SITEMAPS=10
+export AUTO_REFRESH_LOOKBACK_HOURS=12
+export AUTO_REFRESH_POLL_INTERVAL_SECONDS=43200
 uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-The first three environment variables set the defaults shown in Advanced Settings. The user can still override them per scan in the browser. `CRAWL_MAX_CONCURRENCY` controls the bounded thread pool used to fetch subpages during a scan. `CRAWL_MAX_SITEMAPS` limits how many sitemap files are fetched before page crawling begins.
+The first three environment variables set the defaults shown in Advanced Settings. The user can still override them per scan in the browser. `CRAWL_MAX_CONCURRENCY` controls the bounded thread pool used to fetch subpages during a scan. `CRAWL_MAX_SITEMAPS` limits how many sitemap files are fetched before page crawling begins. `AUTO_REFRESH_LOOKBACK_HOURS` controls when a previous completed scan is considered stale. `AUTO_REFRESH_POLL_INTERVAL_SECONDS` controls how frequently the background auto-refresh poller runs.
 
 Advanced Settings bounds:
 
@@ -199,11 +187,58 @@ Recent verified state:
 - Add detailed change views with exact added, removed, and changed URLs.
 - Run broader hosted smoke tests against more real-world sites on the live demo.
 
+## Requirement Coverage And Gaps
+
+Current status against the assignment:
+
+- Web app where users submit a URL and download generated `llms.txt`: **implemented**.
+- Website crawl + metadata extraction (titles/descriptions/URLs): **implemented**.
+- llms.txt generation and validation pipeline: **implemented**.
+- Re-scan awareness with version history + compact change summary: **implemented (V1)**.
+- Clear setup/deploy instructions in README: **implemented**.
+
+Items that are still partial or not fully implemented yet:
+
+- Fully automated ongoing monitoring that periodically re-scans websites and refreshes outputs without manual user action (cron/worker/scheduler): **partially implemented (in-process poller)**.
+- Broad conformance verification against the latest `llmstxt.org` spec across many real websites (including strict edge-case handling): **partially implemented, needs broader validation**.
+- Rich change reporting UI/API with exact URL-level diffs and content-level deltas: **not implemented yet (only compact counts in V1)**.
+- Large-variety production hardening (deeper benchmark corpus, stronger anti-bot handling, richer retries/backoff/observability): **partially implemented**.
+- Deliverable artifacts for submissions (project screenshots/demo video and collaborator checklist guidance): **not documented as a dedicated checklist section yet**.
+
+Auto-refresh current limitations:
+
+- Scheduler runs in-process with the web app lifespan. If the web service is down, refresh jobs do not run.
+- No distributed leader election/locking is implemented yet; multi-instance deployments may trigger duplicate refresh work.
+- Refresh cadence is global via env vars, not per-site custom intervals.
+- No dedicated admin UI for last refresh run status, scheduler health, or retry controls.
+
 ## Live Deployment
 
 - Render public URL: `https://website-llms-txt-generator.onrender.com/`
 
-## Render Free Tier
+## Codebase Tour For Newcomers
+
+If you are onboarding to this repo, start with these files in order:
+
+1. `app/main.py` for API endpoints, startup flow, and the scan lifecycle surface area.
+2. `app/services/scanner.py` for the end-to-end scan pipeline (crawl -> rank -> format -> persist).
+3. `app/services/crawler.py` plus helper services (`fetcher`, `robots`, `sitemap`, `html_parser`) for discovery and extraction behavior.
+4. `app/services/ranker.py` and `app/services/formatter.py` for inclusion and output quality.
+
+   Ranking algorithm (V1) in one paragraph: each discovered resource gets a heuristic score based on URL pattern and metadata signals. The ranker boosts likely high-value pages (homepage, docs, guides, product/pricing, support, company/about, articles, meaningful PDFs/images), downranks low-value utility/legal pages (login, checkout, search, tags, feeds, privacy/terms), then assigns surviving resources to output sections and marks whether to include them in the final `llms.txt`.
+
+5. `app/models.py`, `app/schemas.py`, and `app/db.py` for persistence and API contracts.
+6. `tests/` for expected behavior and edge-case coverage by module.
+
+Recommended first learning tasks:
+
+- Run `pytest -q` and read failures by temporarily breaking one rule in `app/services/ranker.py`.
+- Trace one scan request from `POST /api/scans` through `run_scan` and into generated `storage/scan-*-llms.txt` output.
+- Add one ranking heuristic with a matching unit test to get familiar with the development loop.
+
+## Render Deployment
+
+This repo includes `.python-version` to pin Render to Python 3.13. The dependency set uses packages with compiled wheels, including `pydantic-core`, so avoid deploying on a newer Python runtime until the pinned dependencies publish compatible wheels.
 
 The hosted demo runs on Render. If you attach a persistent disk mounted at
 `/var/data`, configure `STORAGE_DIR=/var/data` so SQLite data and generated
@@ -215,7 +250,7 @@ Recommended Render settings:
 - Runtime: Python.
 - Build command: `pip install -r requirements.txt`.
 - Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`.
-- Instance type: Free.
+- Instance type: choose any paid instance tier that supports your expected traffic and the attached persistent disk.
 - Persistent disk: mount at `/var/data` for durable demo data.
 - Database: `STORAGE_DIR/app.sqlite3` (for example `/var/data/app.sqlite3`).
 - Generated files: local files under `STORAGE_DIR/`.
@@ -234,12 +269,6 @@ Operational caveats:
 - Data durability depends on whether `STORAGE_DIR` points to persistent disk storage.
 - If `STORAGE_DIR` is left at the default `storage/` path, previous scan history and download files may disappear after restart/redeploy.
 - For a demo, open the app shortly before presenting and generate a fresh `llms.txt`.
-
-Render start command:
-
-```bash
-uvicorn app.main:app --host 0.0.0.0 --port $PORT
-```
 
 Hosted demo smoke checklist:
 

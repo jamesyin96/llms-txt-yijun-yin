@@ -33,6 +33,7 @@ class Scan(Base):
         default=CRAWL_MAX_DURATION_SECONDS,
         nullable=False,
     )
+    auto_refresh_daily: Mapped[bool] = mapped_column(default=False, nullable=False)
     pages_found: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     pages_included: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     output_path: Mapped[Optional[str]] = mapped_column(String(2048), nullable=True)
