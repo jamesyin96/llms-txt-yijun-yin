@@ -6,6 +6,7 @@ from app.db import SessionLocal, init_db
 from app.main import app
 from app.models import Scan
 from app.services.change_detector import ChangeSummary
+from app.time_utils import utc_now
 
 
 init_db()
@@ -204,7 +205,7 @@ def test_scan_endpoint_reuses_recent_completed_scan_and_sets_flag(monkeypatch) -
         scan = db.get(Scan, scan_id)
         assert scan is not None
         scan.status = "complete"
-        scan.created_at = datetime.utcnow()
+        scan.created_at = utc_now()
         db.commit()
     finally:
         db.close()
@@ -231,7 +232,7 @@ def test_scan_endpoint_creates_new_scan_when_last_completed_is_stale(monkeypatch
         scan = db.get(Scan, first_id)
         assert scan is not None
         scan.status = "complete"
-        scan.created_at = datetime.utcnow() - timedelta(hours=13)
+        scan.created_at = utc_now() - timedelta(hours=13)
         db.commit()
     finally:
         db.close()

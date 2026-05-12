@@ -5,7 +5,6 @@ file storage. The crawler returns plain dataclasses; the scanner persists those
 resources and renders the downloadable llms.txt file.
 """
 
-from datetime import datetime
 import logging
 from pathlib import Path
 
@@ -14,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.config import CRAWL_MAX_CONCURRENCY, CRAWL_MAX_SITEMAPS, STORAGE_DIR
 from app.db import SessionLocal
 from app.models import Page, Scan
+from app.time_utils import utc_now
 from app.services.change_detector import summarize_changes
 from app.services.crawler import CrawlConfig, CrawlResource, crawl_site
 from app.services.formatter import LlmResource, render_llms_txt, validate_llms_txt
@@ -119,7 +119,7 @@ def _run_scan(scan_id: int, db: Session) -> None:
 
         scan.output_path = str(output_path)
         scan.status = "complete"
-        scan.finished_at = datetime.utcnow()
+        scan.finished_at = utc_now()
         db.commit()
         logger.info(
             "scan_status scan_id=%s status=%s normalized_root_url=%s "
@@ -138,7 +138,7 @@ def _run_scan(scan_id: int, db: Session) -> None:
     except Exception as exc:
         scan.status = "failed"
         scan.error = str(exc)
-        scan.finished_at = datetime.utcnow()
+        scan.finished_at = utc_now()
         db.commit()
         logger.exception(
             "scan_status scan_id=%s status=%s normalized_root_url=%s error=%s "
@@ -201,7 +201,7 @@ def _page_from_ranked_resource(scan_id: int, ranked: RankedResource) -> Page:
         score=ranked.score,
         status_code=resource.status_code,
         content_hash=resource.content_hash,
-        last_crawled_at=datetime.utcnow(),
+        last_crawled_at=utc_now(),
         included=ranked.include,
     )
 

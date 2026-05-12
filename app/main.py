@@ -12,7 +12,7 @@ V1 exposes a deliberately small surface area:
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 import asyncio
 import logging
 
@@ -50,6 +50,7 @@ from app.services.scanner import run_scan
 from app.services.refresh_scheduler import queue_due_auto_refresh_scans
 from app.services.security import UnsafeUrlError, assert_safe_url
 from app.services.url_utils import normalize_root_url
+from app.time_utils import as_utc, utc_now
 
 
 logger = logging.getLogger("uvicorn.error")
@@ -94,7 +95,7 @@ async def _auto_refresh_poller(stop_event: asyncio.Event) -> None:
     while not stop_event.is_set():
         logger.info("auto_refresh_poller_tick")
         _run_auto_refresh_cycle()
-        auto_refresh_state.next_poll_at = datetime.utcnow() + timedelta(
+        auto_refresh_state.next_poll_at = utc_now() + timedelta(
             seconds=AUTO_REFRESH_POLL_INTERVAL_SECONDS
         )
         try:
@@ -105,7 +106,7 @@ async def _auto_refresh_poller(stop_event: asyncio.Event) -> None:
 
 def _run_auto_refresh_cycle() -> None:
     auto_refresh_state.running = True
-    auto_refresh_state.last_poll_started_at = datetime.utcnow()
+    auto_refresh_state.last_poll_started_at = utc_now()
     auto_refresh_state.last_error = None
     db = SessionLocal()
     try:
@@ -121,7 +122,7 @@ def _run_auto_refresh_cycle() -> None:
         logger.exception("auto_refresh_cycle_failed error=%s", exc)
     finally:
         auto_refresh_state.running = False
-        auto_refresh_state.last_poll_finished_at = datetime.utcnow()
+        auto_refresh_state.last_poll_finished_at = utc_now()
         db.close()
 
 
@@ -284,9 +285,9 @@ def get_auto_refresh_status() -> AutoRefreshStatus:
         running=auto_refresh_state.running,
         lookback_hours=AUTO_REFRESH_LOOKBACK_HOURS,
         poll_interval_seconds=AUTO_REFRESH_POLL_INTERVAL_SECONDS,
-        last_poll_started_at=_as_utc(auto_refresh_state.last_poll_started_at),
-        last_poll_finished_at=_as_utc(auto_refresh_state.last_poll_finished_at),
-        next_poll_at=_as_utc(auto_refresh_state.next_poll_at),
+        last_poll_started_at=as_utc(auto_refresh_state.last_poll_started_at),
+        last_poll_finished_at=as_utc(auto_refresh_state.last_poll_finished_at),
+        next_poll_at=as_utc(auto_refresh_state.next_poll_at),
         last_queued_count=auto_refresh_state.last_queued_count,
         last_error=auto_refresh_state.last_error,
     )
@@ -329,20 +330,10 @@ def _scan_history_item(scan: Scan) -> ScanHistoryItem:
         pages_found=scan.pages_found,
         pages_included=scan.pages_included,
         download_url=_download_url_for(scan),
-        created_at=_as_utc(scan.created_at),
-        finished_at=_as_utc(scan.finished_at),
+        created_at=as_utc(scan.created_at),
+        finished_at=as_utc(scan.finished_at),
         error=scan.error,
     )
-
-
-def _as_utc(value: datetime | None) -> datetime | None:
-    """Treat stored naive datetimes as UTC and return tz-aware UTC values."""
-
-    if value is None:
-        return None
-    if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
-    return value.astimezone(timezone.utc)
 
 
 def _download_url_for(scan: Scan) -> str | None:
@@ -377,7 +368,7 @@ def _next_version_number(db: Session, normalized_root_url: str) -> int:
 
 
 def _latest_completed_scan_within(db: Session, normalized_root_url: str, *, hours: int) -> Scan | None:
-    threshold = datetime.utcnow() - timedelta(hours=hours)
+    threshold = utc_now() - timedelta(hours=hours)
     return (
         db.query(Scan)
         .filter(Scan.normalized_root_url == normalized_root_url)

@@ -14,6 +14,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.config import CRAWL_MAX_DEPTH, CRAWL_MAX_DURATION_SECONDS, CRAWL_MAX_PAGES
 from app.db import Base
+from app.time_utils import utc_now
 
 
 class Scan(Base):
@@ -40,8 +41,12 @@ class Scan(Base):
     previous_scan_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     change_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
-    finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+    )
+    finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     pages: Mapped[list["Page"]] = relationship(
         back_populates="scan",
@@ -65,7 +70,7 @@ class Page(Base):
     score: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
     status_code: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     content_hash: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
-    last_crawled_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    last_crawled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     included: Mapped[bool] = mapped_column(default=True, nullable=False)
 
     scan: Mapped[Scan] = relationship(back_populates="pages")

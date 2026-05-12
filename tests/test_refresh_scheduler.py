@@ -1,9 +1,10 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 from uuid import uuid4
 
 from app.db import SessionLocal, init_db
 from app.models import Scan
 from app.services.refresh_scheduler import queue_due_auto_refresh_scans
+from app.time_utils import utc_now
 
 
 init_db()
@@ -19,7 +20,7 @@ def test_queue_due_auto_refresh_scans_queues_for_stale_refresh_enabled_site() ->
             version_number=1,
             status="complete",
             auto_refresh_daily=True,
-            created_at=datetime.utcnow() - timedelta(hours=13),
+            created_at=utc_now() - timedelta(hours=13),
         )
         db.add(base)
         db.commit()
@@ -46,7 +47,7 @@ def test_queue_due_auto_refresh_scans_skips_recent_scan() -> None:
             version_number=1,
             status="complete",
             auto_refresh_daily=True,
-            created_at=datetime.utcnow() - timedelta(hours=2),
+            created_at=utc_now() - timedelta(hours=2),
         )
         db.add(recent)
         db.commit()
@@ -68,7 +69,7 @@ def test_queue_due_auto_refresh_scans_skips_when_auto_refresh_disabled() -> None
             version_number=1,
             status="complete",
             auto_refresh_daily=False,
-            created_at=datetime.utcnow() - timedelta(hours=30),
+            created_at=utc_now() - timedelta(hours=30),
         )
         db.add(disabled)
         db.commit()
@@ -90,7 +91,7 @@ def test_queue_due_auto_refresh_scans_skips_active_scan() -> None:
             version_number=1,
             status="complete",
             auto_refresh_daily=True,
-            created_at=datetime.utcnow() - timedelta(hours=30),
+            created_at=utc_now() - timedelta(hours=30),
         )
         active = Scan(
             root_url=url,
@@ -98,7 +99,7 @@ def test_queue_due_auto_refresh_scans_skips_active_scan() -> None:
             version_number=2,
             status="queued",
             auto_refresh_daily=True,
-            created_at=datetime.utcnow() - timedelta(hours=13),
+            created_at=utc_now() - timedelta(hours=13),
         )
         db.add_all([complete, active])
         db.commit()

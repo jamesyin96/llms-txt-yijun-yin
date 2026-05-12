@@ -1,6 +1,6 @@
 """Periodic auto-refresh scheduler for refresh-enabled sites."""
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 import logging
 
 from sqlalchemy import func
@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.config import AUTO_REFRESH_LOOKBACK_HOURS
 from app.models import Scan
+from app.time_utils import utc_now
 
 
 logger = logging.getLogger("uvicorn.error")
@@ -21,7 +22,7 @@ def queue_due_auto_refresh_scans(db: Session) -> list[int]:
     URL is older than 12 hours.
     """
 
-    stale_before = datetime.utcnow() - timedelta(hours=AUTO_REFRESH_LOOKBACK_HOURS)
+    stale_before = utc_now() - timedelta(hours=AUTO_REFRESH_LOOKBACK_HOURS)
     logger.info(
         "auto_refresh_cycle_start lookback_hours=%s stale_before=%s",
         AUTO_REFRESH_LOOKBACK_HOURS,
