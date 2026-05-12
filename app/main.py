@@ -51,6 +51,7 @@ from app.services.url_utils import normalize_root_url
 
 
 logger = logging.getLogger("uvicorn.error")
+REFRESH_LOOKBACK_HOURS = 12
 
 
 @asynccontextmanager
