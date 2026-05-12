@@ -11,7 +11,7 @@ V1 exposes a deliberately small surface area:
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import asyncio
 import logging
 
@@ -284,10 +284,20 @@ def _scan_history_item(scan: Scan) -> ScanHistoryItem:
         pages_found=scan.pages_found,
         pages_included=scan.pages_included,
         download_url=_download_url_for(scan),
-        created_at=scan.created_at,
-        finished_at=scan.finished_at,
+        created_at=_as_utc(scan.created_at),
+        finished_at=_as_utc(scan.finished_at),
         error=scan.error,
     )
+
+
+def _as_utc(value: datetime | None) -> datetime | None:
+    """Treat stored naive datetimes as UTC and return tz-aware UTC values."""
+
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
 def _download_url_for(scan: Scan) -> str | None:
