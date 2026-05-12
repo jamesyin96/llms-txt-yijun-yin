@@ -3,12 +3,11 @@
 from datetime import timedelta
 import logging
 
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.config import AUTO_REFRESH_LOOKBACK_HOURS
 from app.models import Scan
-from app.time_utils import utc_now
+from app.time_utils import as_utc, utc_now
 
 
 logger = logging.getLogger("uvicorn.error")
@@ -28,18 +27,16 @@ def queue_due_auto_refresh_scans(db: Session) -> list[int]:
         AUTO_REFRESH_LOOKBACK_HOURS,
         stale_before.isoformat(),
     )
-    stale_roots = (
+    root_urls = (
         db.query(Scan.normalized_root_url)
-        .filter(Scan.auto_refresh_daily.is_(True))
         .group_by(Scan.normalized_root_url)
-        .having(func.max(Scan.created_at) < stale_before)
         .all()
     )
 
-    logger.info("auto_refresh_candidates count=%s", len(stale_roots))
+    logger.info("auto_refresh_candidates count=%s", len(root_urls))
 
     queued_ids: list[int] = []
-    for (root_url,) in stale_roots:
+    for (root_url,) in root_urls:
         latest = (
             db.query(Scan)
             .filter(Scan.normalized_root_url == root_url)
@@ -49,12 +46,19 @@ def queue_due_auto_refresh_scans(db: Session) -> list[int]:
         if latest is None:
             logger.warning("auto_refresh_candidate_missing_latest normalized_root_url=%s", root_url)
             continue
+        if not latest.auto_refresh_daily:
+            logger.info("auto_refresh_candidate_disabled normalized_root_url=%s", root_url)
+            continue
         if latest.status in ACTIVE_SCAN_STATUSES:
             logger.info(
                 "auto_refresh_candidate_active normalized_root_url=%s status=%s",
                 root_url,
                 latest.status,
             )
+            continue
+        created_at = as_utc(latest.created_at)
+        if created_at is None or created_at >= stale_before:
+            logger.info("auto_refresh_candidate_recent normalized_root_url=%s", root_url)
             continue
 
         next_version = (latest.version_number or 0) + 1

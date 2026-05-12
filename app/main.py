@@ -168,7 +168,7 @@ def create_scan(
 
     existing = _latest_completed_scan_within(db, normalized_url, hours=AUTO_REFRESH_LOOKBACK_HOURS)
     if existing is not None:
-        existing.auto_refresh_daily = payload.auto_refresh_daily or existing.auto_refresh_daily
+        existing.auto_refresh_daily = payload.auto_refresh_daily
         db.commit()
         return ScanCreated(
             scan_id=existing.id,

@@ -219,6 +219,43 @@ def test_scan_endpoint_reuses_recent_completed_scan_and_sets_flag(monkeypatch) -
     assert payload["auto_refresh_daily"] is True
 
 
+def test_scan_endpoint_can_disable_auto_refresh_on_reused_scan(monkeypatch) -> None:
+    import app.main as main
+
+    monkeypatch.setattr(main, "run_scan", lambda scan_id: None)
+    url = f"https://disable-refresh-{uuid4().hex}.example.com/"
+    created = client.post("/api/scans", json={"url": url, "auto_refresh_daily": True})
+    scan_id = created.json()["scan_id"]
+
+    db = SessionLocal()
+    try:
+        scan = db.get(Scan, scan_id)
+        assert scan is not None
+        scan.status = "complete"
+        scan.created_at = utc_now()
+        db.commit()
+    finally:
+        db.close()
+
+    reused = client.post("/api/scans", json={"url": url, "auto_refresh_daily": False})
+
+    assert reused.status_code == 200
+    payload = reused.json()
+    assert payload["scan_id"] == scan_id
+    assert payload["reused_existing"] is True
+    assert payload["auto_refresh_daily"] is False
+
+
+def test_scan_endpoint_defaults_auto_refresh_enabled(monkeypatch) -> None:
+    import app.main as main
+
+    monkeypatch.setattr(main, "run_scan", lambda scan_id: None)
+    response = client.post("/api/scans", json={"url": f"https://default-refresh-{uuid4().hex}.example.com/"})
+
+    assert response.status_code == 200
+    assert response.json()["auto_refresh_daily"] is True
+
+
 def test_scan_endpoint_creates_new_scan_when_last_completed_is_stale(monkeypatch) -> None:
     import app.main as main
 

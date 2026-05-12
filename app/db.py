@@ -90,6 +90,13 @@ def _run_lightweight_migrations() -> None:
         "auto_refresh_daily",
         "BOOLEAN NOT NULL DEFAULT 0",
     )
+    _add_index_if_missing(
+        "ix_scans_normalized_root_url_version_id",
+        """
+        CREATE INDEX ix_scans_normalized_root_url_version_id
+        ON scans (normalized_root_url, version_number, id)
+        """,
+    )
     _backfill_scan_versions()
 
 
@@ -98,6 +105,15 @@ def _add_column_if_missing(existing_columns: set[str], column_name: str, definit
         return
     with engine.begin() as connection:
         connection.execute(text(f"ALTER TABLE scans ADD COLUMN {column_name} {definition}"))
+
+
+def _add_index_if_missing(index_name: str, create_statement: str) -> None:
+    inspector = inspect(engine)
+    existing_indexes = {index["name"] for index in inspector.get_indexes("scans")}
+    if index_name in existing_indexes:
+        return
+    with engine.begin() as connection:
+        connection.execute(text(create_statement))
 
 
 def _backfill_scan_versions() -> None:

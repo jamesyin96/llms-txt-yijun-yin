@@ -9,7 +9,7 @@ tables later.
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.config import CRAWL_MAX_DEPTH, CRAWL_MAX_DURATION_SECONDS, CRAWL_MAX_PAGES
@@ -21,6 +21,14 @@ class Scan(Base):
     """A single requested website scan and its generated output state."""
 
     __tablename__ = "scans"
+    __table_args__ = (
+        Index(
+            "ix_scans_normalized_root_url_version_id",
+            "normalized_root_url",
+            "version_number",
+            "id",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     root_url: Mapped[str] = mapped_column(String(2048), nullable=False)

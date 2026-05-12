@@ -19,7 +19,7 @@ class ScanCreate(BaseModel):
         ge=1.0,
         le=60.0,
     )
-    auto_refresh_daily: bool = False
+    auto_refresh_daily: bool = True
 
 
 class ScanCreated(BaseModel):
