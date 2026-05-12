@@ -78,3 +78,33 @@ def test_queue_due_auto_refresh_scans_skips_when_auto_refresh_disabled() -> None
         assert queued == []
     finally:
         db.close()
+
+
+def test_queue_due_auto_refresh_scans_skips_active_scan() -> None:
+    db = SessionLocal()
+    try:
+        url = f"https://refresh-active-{uuid4().hex}.example.com/"
+        complete = Scan(
+            root_url=url,
+            normalized_root_url=url,
+            version_number=1,
+            status="complete",
+            auto_refresh_daily=True,
+            created_at=datetime.utcnow() - timedelta(hours=30),
+        )
+        active = Scan(
+            root_url=url,
+            normalized_root_url=url,
+            version_number=2,
+            status="queued",
+            auto_refresh_daily=True,
+            created_at=datetime.utcnow() - timedelta(hours=13),
+        )
+        db.add_all([complete, active])
+        db.commit()
+
+        queued = queue_due_auto_refresh_scans(db)
+
+        assert queued == []
+    finally:
+        db.close()

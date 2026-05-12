@@ -263,3 +263,14 @@ def test_scan_history_returns_most_recent_ten_versions(monkeypatch) -> None:
     assert len(scans) == 10
     assert scans[0]["scan_id"] == scan_ids[-1]
     assert scans[-1]["scan_id"] == scan_ids[-10]
+
+
+def test_auto_refresh_status_endpoint_returns_scheduler_health() -> None:
+    response = client.get("/api/auto-refresh/status")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["enabled"] is True
+    assert data["lookback_hours"] == 12
+    assert data["poll_interval_seconds"] == 3600
+    assert data["last_queued_count"] >= 0

@@ -99,6 +99,8 @@ uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 
 The first three environment variables set the defaults shown in Advanced Settings. The user can still override them per scan in the browser. `CRAWL_MAX_CONCURRENCY` controls the bounded thread pool used to fetch subpages during a scan. `CRAWL_MAX_SITEMAPS` limits how many sitemap files are fetched before page crawling begins. `AUTO_REFRESH_LOOKBACK_HOURS` controls when a previous completed scan is considered stale. `AUTO_REFRESH_POLL_INTERVAL_SECONDS` controls how frequently the background auto-refresh poller runs; by default it checks once per hour.
 
+Auto-refresh is an in-process background poller that starts with the FastAPI app. It runs one cycle immediately on startup, then checks once per `AUTO_REFRESH_POLL_INTERVAL_SECONDS`. A site is refreshed only when its latest scan is older than `AUTO_REFRESH_LOOKBACK_HOURS` and auto-refresh is enabled for that site. If a site already has a queued, crawling, or generating scan, the poller skips it to avoid duplicate refresh work. Runtime health is available at `/api/auto-refresh/status`.
+
 Advanced Settings bounds:
 
 - Max pages: 1 to 500.
@@ -208,9 +210,9 @@ Items that are still partial or not fully implemented yet:
 Auto-refresh current limitations:
 
 - Scheduler runs in-process with the web app lifespan. If the web service is down, refresh jobs do not run.
-- No distributed leader election/locking is implemented yet; multi-instance deployments may trigger duplicate refresh work.
+- No distributed leader election/locking is implemented yet; multi-instance deployments may still trigger duplicate refresh work across instances.
 - Refresh cadence is global via env vars, not per-site custom intervals.
-- No dedicated admin UI for last refresh run status, scheduler health, or retry controls.
+- No dedicated admin UI for retry controls.
 
 ## Live Deployment
 

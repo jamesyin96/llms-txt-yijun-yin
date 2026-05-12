@@ -88,3 +88,17 @@ class ScanHistory(BaseModel):
 
     root_url: str
     scans: list[ScanHistoryItem]
+
+
+class AutoRefreshStatus(BaseModel):
+    """Runtime health snapshot for the in-process auto-refresh poller."""
+
+    enabled: bool
+    running: bool
+    lookback_hours: int
+    poll_interval_seconds: int
+    last_poll_started_at: Optional[datetime] = None
+    last_poll_finished_at: Optional[datetime] = None
+    next_poll_at: Optional[datetime] = None
+    last_queued_count: int = 0
+    last_error: Optional[str] = None

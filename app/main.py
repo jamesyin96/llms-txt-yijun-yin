@@ -11,6 +11,7 @@ V1 exposes a deliberately small surface area:
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import asyncio
 import logging
@@ -36,6 +37,7 @@ from app.config import (
 from app.db import SessionLocal, get_db, init_db
 from app.models import Scan
 from app.schemas import (
+    AutoRefreshStatus,
     ScanChangeSummary,
     ScanCreate,
     ScanCreated,
@@ -51,7 +53,21 @@ from app.services.url_utils import normalize_root_url
 
 
 logger = logging.getLogger("uvicorn.error")
-REFRESH_LOOKBACK_HOURS = 12
+
+
+@dataclass
+class AutoRefreshRuntimeState:
+    """In-memory health state for the single-process refresh poller."""
+
+    running: bool = False
+    last_poll_started_at: datetime | None = None
+    last_poll_finished_at: datetime | None = None
+    next_poll_at: datetime | None = None
+    last_queued_count: int = 0
+    last_error: str | None = None
+
+
+auto_refresh_state = AutoRefreshRuntimeState()
 
 
 @asynccontextmanager
@@ -78,6 +94,9 @@ async def _auto_refresh_poller(stop_event: asyncio.Event) -> None:
     while not stop_event.is_set():
         logger.info("auto_refresh_poller_tick")
         _run_auto_refresh_cycle()
+        auto_refresh_state.next_poll_at = datetime.utcnow() + timedelta(
+            seconds=AUTO_REFRESH_POLL_INTERVAL_SECONDS
+        )
         try:
             await asyncio.wait_for(stop_event.wait(), timeout=AUTO_REFRESH_POLL_INTERVAL_SECONDS)
         except TimeoutError:
@@ -85,15 +104,24 @@ async def _auto_refresh_poller(stop_event: asyncio.Event) -> None:
 
 
 def _run_auto_refresh_cycle() -> None:
+    auto_refresh_state.running = True
+    auto_refresh_state.last_poll_started_at = datetime.utcnow()
+    auto_refresh_state.last_error = None
     db = SessionLocal()
     try:
         queued_scan_ids = queue_due_auto_refresh_scans(db)
+        auto_refresh_state.last_queued_count = len(queued_scan_ids)
         logger.info("auto_refresh_poller_queued queued_count=%s", len(queued_scan_ids))
         for scan_id in queued_scan_ids:
             logger.info("auto_refresh_scan_start scan_id=%s", scan_id)
             run_scan(scan_id)
             logger.info("auto_refresh_scan_complete scan_id=%s", scan_id)
+    except Exception as exc:
+        auto_refresh_state.last_error = str(exc)
+        logger.exception("auto_refresh_cycle_failed error=%s", exc)
     finally:
+        auto_refresh_state.running = False
+        auto_refresh_state.last_poll_finished_at = datetime.utcnow()
         db.close()
 
 
@@ -244,6 +272,23 @@ def get_scan(scan_id: int, db: Session = Depends(get_db)) -> ScanStatus:
         pages_included=scan.pages_included,
         download_url=_download_url_for(scan),
         error=scan.error,
+    )
+
+
+@app.get("/api/auto-refresh/status", response_model=AutoRefreshStatus)
+def get_auto_refresh_status() -> AutoRefreshStatus:
+    """Return the in-process auto-refresh poller health snapshot."""
+
+    return AutoRefreshStatus(
+        enabled=True,
+        running=auto_refresh_state.running,
+        lookback_hours=AUTO_REFRESH_LOOKBACK_HOURS,
+        poll_interval_seconds=AUTO_REFRESH_POLL_INTERVAL_SECONDS,
+        last_poll_started_at=_as_utc(auto_refresh_state.last_poll_started_at),
+        last_poll_finished_at=_as_utc(auto_refresh_state.last_poll_finished_at),
+        next_poll_at=_as_utc(auto_refresh_state.next_poll_at),
+        last_queued_count=auto_refresh_state.last_queued_count,
+        last_error=auto_refresh_state.last_error,
     )
 
 

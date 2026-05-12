@@ -11,6 +11,7 @@ from app.models import Scan
 
 
 logger = logging.getLogger("uvicorn.error")
+ACTIVE_SCAN_STATUSES = ("queued", "crawling", "generating")
 
 
 def queue_due_auto_refresh_scans(db: Session) -> list[int]:
@@ -46,6 +47,13 @@ def queue_due_auto_refresh_scans(db: Session) -> list[int]:
         )
         if latest is None:
             logger.warning("auto_refresh_candidate_missing_latest normalized_root_url=%s", root_url)
+            continue
+        if latest.status in ACTIVE_SCAN_STATUSES:
+            logger.info(
+                "auto_refresh_candidate_active normalized_root_url=%s status=%s",
+                root_url,
+                latest.status,
+            )
             continue
 
         next_version = (latest.version_number or 0) + 1
