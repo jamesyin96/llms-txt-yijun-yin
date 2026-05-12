@@ -45,3 +45,8 @@ CRAWL_MAX_CONCURRENCY = min(int_setting("CRAWL_MAX_CONCURRENCY", 10), 20)
 # bounded so scans reach page crawling promptly instead of spending the whole
 # run enumerating sitemap candidates that exceed CRAWL_MAX_PAGES anyway.
 CRAWL_MAX_SITEMAPS = min(int_setting("CRAWL_MAX_SITEMAPS", 10), 50)
+AUTO_REFRESH_LOOKBACK_HOURS = min(int_setting("AUTO_REFRESH_LOOKBACK_HOURS", 12), 168)
+AUTO_REFRESH_POLL_INTERVAL_SECONDS = min(
+    int_setting("AUTO_REFRESH_POLL_INTERVAL_SECONDS", AUTO_REFRESH_LOOKBACK_HOURS * 3600),
+    7 * 24 * 3600,
+)

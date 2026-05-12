@@ -3,6 +3,7 @@ const input = document.querySelector("[data-url-input]");
 const crawlMaxPagesInput = document.querySelector("[data-crawl-max-pages]");
 const crawlMaxDepthInput = document.querySelector("[data-crawl-max-depth]");
 const crawlMaxDurationInput = document.querySelector("[data-crawl-max-duration]");
+const autoRefreshDailyInput = document.querySelector("[data-auto-refresh-daily]");
 const statusEl = document.querySelector("[data-status]");
 const resultEl = document.querySelector("[data-result]");
 
@@ -24,6 +25,11 @@ form.addEventListener("submit", async (event) => {
     }
 
     const data = await response.json();
+    if (data.reused_existing) {
+      setStatus(`Using recent version ${data.version_number} (updated within 12 hours).`);
+      pollScan(data.scan_id);
+      return;
+    }
     pollScan(data.scan_id);
   } catch (error) {
     setStatus(error.message, true);
@@ -36,6 +42,7 @@ function scanPayload() {
     crawl_max_pages: Number(crawlMaxPagesInput.value),
     crawl_max_depth: Number(crawlMaxDepthInput.value),
     crawl_max_duration_seconds: Number(crawlMaxDurationInput.value),
+    auto_refresh_daily: autoRefreshDailyInput.checked,
   };
 }
 
@@ -138,6 +145,10 @@ function createHistoryRow(scan) {
   const detail = document.createElement("span");
   const pageLabel = scan.pages_included === 1 ? "page" : "pages";
   const parts = [`${scan.status}`, `${scan.pages_included} ${pageLabel} included`];
+  const createdAtText = formatCreatedAt(scan.created_at);
+  if (createdAtText) {
+    parts.push(`created ${createdAtText}`);
+  }
   const changeText = formatChangeSummary(scan.change_summary);
   if (changeText) {
     parts.push(changeText);
@@ -155,6 +166,19 @@ function createHistoryRow(scan) {
   }
 
   return row;
+}
+
+function formatCreatedAt(createdAt) {
+  if (!createdAt) {
+    return "";
+  }
+
+  const parsed = new Date(createdAt);
+  if (Number.isNaN(parsed.getTime())) {
+    return "";
+  }
+
+  return parsed.toLocaleString();
 }
 
 function formatChangeSummary(summary) {

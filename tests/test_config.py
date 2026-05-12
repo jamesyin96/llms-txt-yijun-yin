@@ -1,4 +1,7 @@
 from app.config import float_setting, int_setting
+import importlib
+
+import app.config as config
 
 
 def test_int_setting_uses_positive_env_value(monkeypatch) -> None:
@@ -27,3 +30,13 @@ def test_float_setting_falls_back_for_invalid_or_non_positive_values(monkeypatch
 
     monkeypatch.setenv("TEST_FLOAT_SETTING", "-1")
     assert float_setting("TEST_FLOAT_SETTING", 5.0) == 5.0
+
+
+def test_auto_refresh_settings_from_env(monkeypatch) -> None:
+    monkeypatch.setenv("AUTO_REFRESH_LOOKBACK_HOURS", "24")
+    monkeypatch.setenv("AUTO_REFRESH_POLL_INTERVAL_SECONDS", "7200")
+
+    reloaded = importlib.reload(config)
+
+    assert reloaded.AUTO_REFRESH_LOOKBACK_HOURS == 24
+    assert reloaded.AUTO_REFRESH_POLL_INTERVAL_SECONDS == 7200
