@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ app_name }}</title>
-    <link rel="stylesheet" href="/static/styles.css?v=advanced-settings">
+    <link rel="stylesheet" href="/static/styles.css?v=advanced-help">
   </head>
   <body>
     <main>
@@ -25,14 +25,17 @@
                 <label>
                   <span>Max pages</span>
                   <input data-crawl-max-pages name="crawl_max_pages" type="number" min="1" max="500" step="1" value="{{ crawl_max_pages }}" required>
+                  <small>Total pages/resources to include.</small>
                 </label>
                 <label>
                   <span>Max depth</span>
                   <input data-crawl-max-depth name="crawl_max_depth" type="number" min="0" max="5" step="1" value="{{ crawl_max_depth }}" required>
+                  <small>Link levels from the start page.</small>
                 </label>
                 <label>
                   <span>Time budget</span>
                   <input data-crawl-max-duration name="crawl_max_duration_seconds" type="number" min="1" max="60" step="1" value="{{ crawl_max_duration_seconds }}" required>
+                  <small>Total crawl time in seconds.</small>
                 </label>
               </div>
             </details>

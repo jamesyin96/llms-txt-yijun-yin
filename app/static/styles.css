@@ -84,8 +84,8 @@ button:hover {
 }
 
 .advanced-settings {
-  width: min(560px, 100%);
-  max-width: 560px;
+  width: 100%;
+  min-height: 126px;
 }
 
 .advanced-settings summary {
@@ -102,7 +102,7 @@ button:hover {
 .advanced-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  gap: 24px;
   margin-top: 8px;
   padding-top: 2px;
 }
@@ -115,6 +115,12 @@ button:hover {
 .advanced-grid span {
   color: #53606d;
   font-size: 14px;
+}
+
+.advanced-grid small {
+  color: #697586;
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .advanced-grid input {
@@ -215,5 +221,9 @@ button:hover {
 
   .history-row {
     grid-template-columns: 1fr;
+  }
+
+  .advanced-settings {
+    min-height: 306px;
   }
 }
