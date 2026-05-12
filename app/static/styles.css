@@ -188,6 +188,11 @@ button:hover {
   font-size: 14px;
 }
 
+.history-summary .history-created {
+  color: #334155;
+  font-size: 13px;
+}
+
 .history-row a {
   color: #17685f;
   font-weight: 700;

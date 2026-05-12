@@ -145,17 +145,18 @@ function createHistoryRow(scan) {
   const detail = document.createElement("span");
   const pageLabel = scan.pages_included === 1 ? "page" : "pages";
   const parts = [`${scan.status}`, `${scan.pages_included} ${pageLabel} included`];
-  const createdAtText = formatCreatedAt(scan.created_at);
-  if (createdAtText) {
-    parts.push(`created ${createdAtText}`);
-  }
   const changeText = formatChangeSummary(scan.change_summary);
   if (changeText) {
     parts.push(changeText);
   }
   detail.textContent = parts.join(" · ");
 
-  summary.append(title, detail);
+  const created = document.createElement("span");
+  created.className = "history-created";
+  const createdAtText = formatCreatedAt(scan.created_at);
+  created.textContent = createdAtText ? `Created: ${createdAtText}` : "Created: unavailable";
+
+  summary.append(title, detail, created);
   row.append(summary);
 
   if (scan.download_url) {
