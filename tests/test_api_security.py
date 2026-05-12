@@ -128,6 +128,29 @@ def test_scan_history_lists_versions_for_one_site(monkeypatch) -> None:
     assert [scan["version_number"] for scan in data["scans"]] == [2, 1]
 
 
+def test_scan_history_serializes_created_at_in_utc(monkeypatch) -> None:
+    import app.main as main
+
+    monkeypatch.setattr(main, "run_scan", lambda scan_id: None)
+    url = f"https://history-time-{uuid4().hex}.example.com/"
+    created = client.post("/api/scans", json={"url": url})
+    scan_id = created.json()["scan_id"]
+
+    db = SessionLocal()
+    try:
+        scan = db.get(Scan, scan_id)
+        assert scan is not None
+        scan.created_at = datetime(2026, 5, 12, 1, 48, 15)
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get("/api/scans", params={"url": url})
+
+    assert response.status_code == 200
+    assert response.json()["scans"][0]["created_at"].endswith("Z")
+
+
 def test_scan_history_includes_download_url_for_completed_versions(monkeypatch) -> None:
     import app.main as main
 

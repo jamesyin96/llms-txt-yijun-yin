@@ -174,7 +174,8 @@ function formatCreatedAt(createdAt) {
     return "";
   }
 
-  const parsed = new Date(createdAt);
+  const isoValue = /[zZ]|[+-]\d{2}:?\d{2}$/.test(createdAt) ? createdAt : `${createdAt}Z`;
+  const parsed = new Date(isoValue);
   if (Number.isNaN(parsed.getTime())) {
     return "";
   }
