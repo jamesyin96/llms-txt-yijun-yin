@@ -151,7 +151,12 @@ function createHistoryRow(scan) {
   }
   detail.textContent = parts.join(" · ");
 
-  summary.append(title, detail);
+  const created = document.createElement("span");
+  created.className = "history-created";
+  const createdAtText = formatCreatedAt(scan.created_at);
+  created.textContent = createdAtText ? `Created: ${createdAtText}` : "Created: unavailable";
+
+  summary.append(title, detail, created);
   row.append(summary);
 
   if (scan.download_url) {
@@ -162,6 +167,19 @@ function createHistoryRow(scan) {
   }
 
   return row;
+}
+
+function formatCreatedAt(createdAt) {
+  if (!createdAt) {
+    return "";
+  }
+
+  const parsed = new Date(createdAt);
+  if (Number.isNaN(parsed.getTime())) {
+    return "";
+  }
+
+  return parsed.toLocaleString();
 }
 
 function formatChangeSummary(summary) {
