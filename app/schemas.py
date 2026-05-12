@@ -19,6 +19,7 @@ class ScanCreate(BaseModel):
         ge=1.0,
         le=60.0,
     )
+    auto_refresh_daily: bool = False
 
 
 class ScanCreated(BaseModel):
@@ -29,6 +30,8 @@ class ScanCreated(BaseModel):
     crawl_max_pages: int
     crawl_max_depth: int
     crawl_max_duration_seconds: float
+    auto_refresh_daily: bool
+    reused_existing: bool = False
     status: str
 
 
@@ -49,6 +52,7 @@ class ScanStatus(BaseModel):
     crawl_max_pages: int
     crawl_max_depth: int
     crawl_max_duration_seconds: float
+    auto_refresh_daily: bool = False
     previous_scan_id: Optional[int] = None
     change_summary: Optional[ScanChangeSummary] = None
     status: str
@@ -67,6 +71,7 @@ class ScanHistoryItem(BaseModel):
     crawl_max_pages: int
     crawl_max_depth: int
     crawl_max_duration_seconds: float
+    auto_refresh_daily: bool = False
     previous_scan_id: Optional[int] = None
     change_summary: Optional[ScanChangeSummary] = None
     status: str
