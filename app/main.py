@@ -11,6 +11,7 @@ V1 exposes a deliberately small surface area:
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta
 import logging
 
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
@@ -46,6 +47,7 @@ from app.services.url_utils import normalize_root_url
 
 
 logger = logging.getLogger("uvicorn.error")
+REFRESH_LOOKBACK_HOURS = 12
 
 
 @asynccontextmanager
@@ -102,6 +104,21 @@ def create_scan(
     except (ValueError, UnsafeUrlError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    existing = _latest_completed_scan_within(db, normalized_url, hours=REFRESH_LOOKBACK_HOURS)
+    if existing is not None:
+        existing.auto_refresh_daily = payload.auto_refresh_daily or existing.auto_refresh_daily
+        db.commit()
+        return ScanCreated(
+            scan_id=existing.id,
+            version_number=existing.version_number,
+            crawl_max_pages=existing.crawl_max_pages,
+            crawl_max_depth=existing.crawl_max_depth,
+            crawl_max_duration_seconds=existing.crawl_max_duration_seconds,
+            auto_refresh_daily=existing.auto_refresh_daily,
+            reused_existing=True,
+            status=existing.status,
+        )
+
     scan = Scan(
         root_url=payload.url,
         normalized_root_url=normalized_url,
@@ -109,6 +126,7 @@ def create_scan(
         crawl_max_pages=payload.crawl_max_pages,
         crawl_max_depth=payload.crawl_max_depth,
         crawl_max_duration_seconds=payload.crawl_max_duration_seconds,
+        auto_refresh_daily=payload.auto_refresh_daily,
         status="queued",
     )
     db.add(scan)
@@ -134,6 +152,8 @@ def create_scan(
         crawl_max_pages=scan.crawl_max_pages,
         crawl_max_depth=scan.crawl_max_depth,
         crawl_max_duration_seconds=scan.crawl_max_duration_seconds,
+        auto_refresh_daily=scan.auto_refresh_daily,
+        reused_existing=False,
         status=scan.status,
     )
 
@@ -152,6 +172,7 @@ def list_scans(url: str, db: Session = Depends(get_db)) -> ScanHistory:
         db.query(Scan)
         .filter(Scan.normalized_root_url == normalized_url)
         .order_by(Scan.version_number.desc(), Scan.id.desc())
+        .limit(10)
         .all()
     )
     return ScanHistory(
@@ -181,6 +202,7 @@ def get_scan(scan_id: int, db: Session = Depends(get_db)) -> ScanStatus:
         crawl_max_pages=scan.crawl_max_pages,
         crawl_max_depth=scan.crawl_max_depth,
         crawl_max_duration_seconds=scan.crawl_max_duration_seconds,
+        auto_refresh_daily=scan.auto_refresh_daily,
         previous_scan_id=scan.previous_scan_id,
         change_summary=_change_summary_for(scan),
         status=scan.status,
@@ -222,6 +244,7 @@ def _scan_history_item(scan: Scan) -> ScanHistoryItem:
         crawl_max_pages=scan.crawl_max_pages,
         crawl_max_depth=scan.crawl_max_depth,
         crawl_max_duration_seconds=scan.crawl_max_duration_seconds,
+        auto_refresh_daily=scan.auto_refresh_daily,
         previous_scan_id=scan.previous_scan_id,
         change_summary=_change_summary_for(scan),
         status=scan.status,
@@ -263,6 +286,18 @@ def _next_version_number(db: Session, normalized_root_url: str) -> int:
         Scan.normalized_root_url == normalized_root_url
     ).scalar()
     return (current_max or 0) + 1
+
+
+def _latest_completed_scan_within(db: Session, normalized_root_url: str, *, hours: int) -> Scan | None:
+    threshold = datetime.utcnow() - timedelta(hours=hours)
+    return (
+        db.query(Scan)
+        .filter(Scan.normalized_root_url == normalized_root_url)
+        .filter(Scan.status == "complete")
+        .filter(Scan.created_at >= threshold)
+        .order_by(Scan.version_number.desc(), Scan.id.desc())
+        .first()
+    )
 
 
 def _log_startup_state() -> None:

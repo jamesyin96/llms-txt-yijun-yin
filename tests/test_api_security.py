@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+from datetime import datetime, timedelta
 from uuid import uuid4
 
 from app.db import SessionLocal, init_db
@@ -165,3 +166,77 @@ def test_scan_history_rejects_unsafe_url() -> None:
 
     assert response.status_code == 400
     assert "Localhost" in response.json()["detail"]
+
+
+def test_scan_endpoint_reuses_recent_completed_scan_and_sets_flag(monkeypatch) -> None:
+    import app.main as main
+
+    monkeypatch.setattr(main, "run_scan", lambda scan_id: None)
+    url = f"https://reuse-{uuid4().hex}.example.com/"
+    created = client.post("/api/scans", json={"url": url})
+    scan_id = created.json()["scan_id"]
+
+    db = SessionLocal()
+    try:
+        scan = db.get(Scan, scan_id)
+        assert scan is not None
+        scan.status = "complete"
+        scan.created_at = datetime.utcnow()
+        db.commit()
+    finally:
+        db.close()
+
+    reused = client.post("/api/scans", json={"url": url, "auto_refresh_daily": True})
+
+    assert reused.status_code == 200
+    payload = reused.json()
+    assert payload["scan_id"] == scan_id
+    assert payload["reused_existing"] is True
+    assert payload["auto_refresh_daily"] is True
+
+
+def test_scan_endpoint_creates_new_scan_when_last_completed_is_stale(monkeypatch) -> None:
+    import app.main as main
+
+    monkeypatch.setattr(main, "run_scan", lambda scan_id: None)
+    url = f"https://stale-{uuid4().hex}.example.com/"
+    first = client.post("/api/scans", json={"url": url})
+    first_id = first.json()["scan_id"]
+
+    db = SessionLocal()
+    try:
+        scan = db.get(Scan, first_id)
+        assert scan is not None
+        scan.status = "complete"
+        scan.created_at = datetime.utcnow() - timedelta(hours=13)
+        db.commit()
+    finally:
+        db.close()
+
+    second = client.post("/api/scans", json={"url": url})
+
+    assert second.status_code == 200
+    data = second.json()
+    assert data["scan_id"] != first_id
+    assert data["version_number"] == 2
+    assert data["reused_existing"] is False
+
+
+def test_scan_history_returns_most_recent_ten_versions(monkeypatch) -> None:
+    import app.main as main
+
+    monkeypatch.setattr(main, "run_scan", lambda scan_id: None)
+    url = f"https://history-ten-{uuid4().hex}.example.com/"
+
+    scan_ids: list[int] = []
+    for _ in range(12):
+        created = client.post("/api/scans", json={"url": url})
+        scan_ids.append(created.json()["scan_id"])
+
+    response = client.get("/api/scans", params={"url": url})
+
+    assert response.status_code == 200
+    scans = response.json()["scans"]
+    assert len(scans) == 10
+    assert scans[0]["scan_id"] == scan_ids[-1]
+    assert scans[-1]["scan_id"] == scan_ids[-10]
